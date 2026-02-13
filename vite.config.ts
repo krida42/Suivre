@@ -26,9 +26,16 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@app": path.resolve(__dirname, "src/app"),
-      "@features": path.resolve(__dirname, "src/features"),
-      "@shared": path.resolve(__dirname, "src/shared"),
+      "@router": path.resolve(__dirname, "src/router"),
+      "@providers": path.resolve(__dirname, "src/providers"),
+      "@pages": path.resolve(__dirname, "src/pages"),
+      "@hooks": path.resolve(__dirname, "src/hooks"),
+      "@services": path.resolve(__dirname, "src/services"),
+      "@mappers": path.resolve(__dirname, "src/mappers"),
+      "@models": path.resolve(__dirname, "src/types"),
+      "@ui": path.resolve(__dirname, "src/ui"),
+      "@config": path.resolve(__dirname, "src/config"),
+      "@utils": path.resolve(__dirname, "src/utils"),
     },
   },
 });

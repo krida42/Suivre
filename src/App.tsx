@@ -1,4 +1,4 @@
-import { RootRouter } from "@app/router/RootRouter";
+import { RootRouter } from "@router/RootRouter";
 
 export default function App() {
   return <RootRouter />;
