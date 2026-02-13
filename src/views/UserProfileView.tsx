@@ -1,7 +1,6 @@
 import React from "react";
 import { User as UserIcon, ShieldCheck, Unlock, Play } from "lucide-react";
 import { User } from "../types";
-import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Card } from "../components/Card";
 
@@ -10,7 +9,7 @@ interface UserProfileViewProps {
   isSubscribed: boolean;
 }
 
-export const UserProfileView: React.FC<UserProfileViewProps> = ({ currentUser, isSubscribed }) => {
+export const UserProfileView: React.FC<UserProfileViewProps> = () => {
   return (
     <div className="max-w-3xl mx-auto animate-in fade-in">
       <div className="flex items-center gap-6 mb-8">
@@ -41,62 +40,13 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ currentUser, i
                 <img src="https://placehold.co/100x100/6366f1/ffffff" alt="Creator avatar" className="object-cover w-full h-full" />
               </div>
               <div>
-                <h4 className="font-semibold text-white">TechDaily</h4>
+                <h4 className="font-semibold text-white">Fake</h4>
                 <p className="flex items-center gap-1 text-xs font-medium text-green-400">
                   <ShieldCheck className="w-3 h-3" /> Abonnement Actif
                 </p>
               </div>
             </Card>
-
-            {/* Sub 2 (Conditional) */}
-            {isSubscribed && (
-              <Card className="flex items-center gap-4 p-4 transition-all border-indigo-500/50 cursor-pointer hover:border-indigo-400 ring-1 ring-indigo-500/20 glass-panel bg-indigo-500/5">
-                <div className="w-12 h-12 overflow-hidden rounded-full bg-slate-800">
-                  <img
-                    src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/c26f327a-fef3-4e0a-af22-064615352458.png"
-                    alt="Current active creator avatar"
-                    className="object-cover w-full h-full"
-                  />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-white">Nouveau Créateur</h4>
-                  <p className="text-xs font-medium text-indigo-400">Récemment abonné</p>
-                </div>
-              </Card>
-            )}
           </div>
-        </section>
-
-        {/* Section: Unlocked Content */}
-        <section>
-          <h2 className="flex items-center gap-2 mb-4 text-lg font-bold text-white">
-            <Unlock className="w-5 h-5 text-indigo-400" /> Contenus Débloqués
-          </h2>
-          {(currentUser?.unlockedVideoIds?.length || 0) > 0 ? (
-            <div className="overflow-hidden glass-panel border rounded-xl border-white/10">
-              {currentUser?.unlockedVideoIds.map((id) => (
-                <div
-                  key={id}
-                  className="flex items-center gap-4 p-4 transition-colors border-b cursor-pointer border-white/5 last:border-0 hover:bg-white/5"
-                >
-                  <div className="p-2 bg-indigo-500/20 rounded-lg">
-                    <Play className="w-5 h-5 text-indigo-400 fill-indigo-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-white">Contenu Premium #{id}</p>
-                    <p className="text-xs text-slate-400">Débloqué le {new Date().toLocaleDateString()}</p>
-                  </div>
-                  <Button variant="ghost" className="h-8 ml-auto text-xs text-slate-300 hover:text-white">
-                    Revoir
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-8 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
-              <p className="text-sm text-slate-400">Aucune vidéo achetée récemment.</p>
-            </div>
-          )}
         </section>
       </div>
     </div>

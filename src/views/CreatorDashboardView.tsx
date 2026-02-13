@@ -3,7 +3,6 @@ import { LayoutGrid, Upload } from "lucide-react";
 import { DashboardStats } from "../types";
 import { Button } from "../components/Button";
 import { Card, CardContent } from "../components/Card";
-import { useGetCreators } from "../lib/useGetCreators";
 import { useEncryptAndPushToWalrus } from "../lib/encryptAndPushToWalrus";
 import { useGetAllCreators } from "../lib/useGetAllCreators";
 
