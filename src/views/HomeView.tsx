@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, CardContent } from "../components/Card";
-import { useGetCreators, ContentCreator } from "../lib/useGetCreators";
+import { ContentCreator } from "../lib/useGetCreators";
 import { useGetAllCreators } from "../lib/useGetAllCreators";
+import { useGetMyObjects } from "../lib/getMyObjects";
 
 interface HomeViewProps {
   goToCreator: (creator: ContentCreator) => void;
@@ -11,6 +12,7 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({ goToCreator }) => {
   const getCreators = useGetAllCreators();
+  const getMyObjects = useGetMyObjects();
   const [creators, setCreators] = useState<ContentCreator[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -21,6 +23,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ goToCreator }) => {
       try {
         setIsLoading(true);
         const data = await getCreators();
+                await getMyObjects(); // We can call this here to log owned objects, or move it to a more relevant place
+
         if (!isMounted) return;
         setCreators(data);
       } catch (error) {
@@ -46,17 +50,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ goToCreator }) => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">Créateurs</h1>
           <p className="mt-1 text-slate-300">Découvrez les créateurs dont le compte est déployé sur Sui.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="primary" className="rounded-full">
-            Tous
-          </Button>
-          <Button variant="outline" className="rounded-full">
-            Tech
-          </Button>
-          <Button variant="outline" className="rounded-full">
-            Créateurs vidéo
-          </Button>
         </div>
       </section>
 
