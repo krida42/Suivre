@@ -19,6 +19,9 @@ const MAX_DECRYPTED_MEDIA_CACHE_SIZE = 120;
 const decryptedMediaUrlCache = new Map<string, string>();
 const decryptedMediaInFlightCache = new Map<string, Promise<string>>();
 const decryptedMediaUrlSet = new Set<string>();
+const SUBSCRIPTION_CACHE_TTL_MS = 30_000;
+const subscriptionLookupCache = new Map<string, { value: SubscriptionInfo | null; expiresAt: number }>();
+const subscriptionLookupInFlight = new Map<string, Promise<SubscriptionInfo | null>>();
 
 type DecryptArgs = {
   blobId: string;
@@ -56,6 +59,10 @@ function setAndThrow(setError: (value: string | null) => void, message: string):
 
 function makeDecryptionCacheKey(args: { creatorId: string; blobId: string; mimeType: string }): string {
   return `${args.creatorId.toLowerCase()}::${args.blobId}::${args.mimeType.toLowerCase()}`;
+}
+
+function makeSubscriptionLookupCacheKey(ownerAddress: string, creatorId: string): string {
+  return `${ownerAddress.toLowerCase()}::${creatorId.toLowerCase()}`;
 }
 
 function getCachedDecryptedMediaUrl(cacheKey: string): string | null {
@@ -278,7 +285,28 @@ export function useDecryptContent(): UseDecryptContentReturn {
         const decryptionPromise = (async () => {
           const suiAddress = currentAccount.address;
           const sessionKey = await ensureSessionKey(suiAddress);
-          const subscription = await getLatestSubscriptionForCreator(suiClient, suiAddress, creatorId);
+          const subscriptionCacheKey = makeSubscriptionLookupCacheKey(suiAddress, creatorId);
+          const now = Date.now();
+          const cachedSubscription = subscriptionLookupCache.get(subscriptionCacheKey);
+
+          let subscription: SubscriptionInfo | null;
+          if (cachedSubscription && cachedSubscription.expiresAt > now) {
+            subscription = cachedSubscription.value;
+          } else {
+            let lookupPromise = subscriptionLookupInFlight.get(subscriptionCacheKey);
+            if (!lookupPromise) {
+              lookupPromise = getLatestSubscriptionForCreator(suiClient, suiAddress, creatorId).finally(() => {
+                subscriptionLookupInFlight.delete(subscriptionCacheKey);
+              });
+              subscriptionLookupInFlight.set(subscriptionCacheKey, lookupPromise);
+            }
+
+            subscription = await lookupPromise;
+            subscriptionLookupCache.set(subscriptionCacheKey, {
+              value: subscription,
+              expiresAt: now + SUBSCRIPTION_CACHE_TTL_MS,
+            });
+          }
 
           if (!subscription) {
             setAndThrow(setError, "Aucun abonnement valide trouve pour ce createur.");

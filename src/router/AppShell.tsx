@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { User, Upload } from "lucide-react";
-import { ConnectButton, useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
+import { ConnectButton, useCurrentAccount, useCurrentWallet, useSuiClient } from "@mysten/dapp-kit";
+import type { SuiClient } from "@mysten/sui/client";
 import { AppRoutes } from "@router/AppRoutes";
 import { ConnectWalletPage } from "@pages/ConnectWalletPage";
+import { useGetAllCreators } from "@hooks/useGetAllCreators";
+import { fetchCreatorContent } from "@hooks/useGetCreatorContent";
+import { useDecryptContent } from "@hooks/useDecryptContent";
 import { useUserSubscriptions } from "@hooks/useUserSubscriptions";
 import { useGetOwnedObjects } from "@hooks/useGetOwnedObjects";
 import { Button } from "@ui";
@@ -11,18 +15,29 @@ import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
 import type { User as UserType } from "@models/domain";
 import type { ContentCreator } from "@models/creators";
 
+const PREFETCH_CREATOR_CONCURRENCY = 2;
+const PREFETCH_MEDIA_CONCURRENCY = 4;
+
 export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
+  const suiClient = useSuiClient() as SuiClient;
 
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const { connectionStatus } = useCurrentWallet();
   const currentAccount = useCurrentAccount();
   const isWalletConnected = Boolean(currentAccount?.address);
+  const { data: allCreators = [] } = useGetAllCreators();
+  const { decryptContent: decryptForPrefetch } = useDecryptContent();
   const { subscriptions } = useUserSubscriptions();
   const [isSubscribedGlobal, setIsSubscribedGlobal] = useState(false);
   const [hasCreatorProfile, setHasCreatorProfile] = useState(false);
   const getOwnedObjects = useGetOwnedObjects();
+  const scheduledPrefetchMediaKeysRef = useRef<Set<string>>(new Set());
+  const subscribedCreatorIds = useMemo(
+    () => new Set(subscriptions.map((subscription) => subscription.creatorId.toLowerCase())),
+    [subscriptions]
+  );
 
   useEffect(() => {
     const checkCreatorCap = async () => {
@@ -49,6 +64,10 @@ export function AppShell() {
   }, [subscriptions]);
 
   useEffect(() => {
+    scheduledPrefetchMediaKeysRef.current.clear();
+  }, [currentAccount?.address]);
+
+  useEffect(() => {
     if (!currentAccount?.address) {
       setCurrentUser(null);
       return;
@@ -64,6 +83,94 @@ export function AppShell() {
       subscribedCreatorIds: previous?.subscribedCreatorIds ?? [],
     }));
   }, [currentAccount?.address]);
+
+  useEffect(() => {
+    if (!isWalletConnected || !currentAccount?.address) return;
+    if (!allCreators.length) return;
+
+    let cancelled = false;
+    const creatorIdsQueue = [...allCreators]
+      .sort((left, right) => {
+        const leftSubscribed = subscribedCreatorIds.has(left.id.toLowerCase()) ? 1 : 0;
+        const rightSubscribed = subscribedCreatorIds.has(right.id.toLowerCase()) ? 1 : 0;
+        return rightSubscribed - leftSubscribed;
+      })
+      .map((creator) => creator.id);
+    const mediaTasks: Array<() => Promise<void>> = [];
+
+    const pushMediaTask = (creatorId: string, blobId: string, mimeType: string | null) => {
+      const mediaTaskKey = `${creatorId.toLowerCase()}::${blobId}::${(mimeType ?? "").toLowerCase()}`;
+      if (scheduledPrefetchMediaKeysRef.current.has(mediaTaskKey)) {
+        return;
+      }
+
+      scheduledPrefetchMediaKeysRef.current.add(mediaTaskKey);
+      mediaTasks.push(async () => {
+        if (cancelled) return;
+        try {
+          await decryptForPrefetch({
+            blobId,
+            creatorId,
+            mimeType,
+          });
+        } catch (error) {
+          // Failing silently here keeps prefetch best-effort while UI remains responsive.
+          console.debug("Global media prefetch skipped", { creatorId, blobId, error });
+        }
+      });
+    };
+
+    const run = async () => {
+      const creatorWorkers = Array.from(
+        { length: Math.min(PREFETCH_CREATOR_CONCURRENCY, creatorIdsQueue.length) },
+        async () => {
+          while (creatorIdsQueue.length > 0 && !cancelled) {
+            const creatorId = creatorIdsQueue.shift();
+            if (!creatorId) break;
+
+            try {
+              const creatorContents = await fetchCreatorContent(suiClient, creatorId);
+              if (cancelled) return;
+
+              for (const content of creatorContents) {
+                if (content.imageBlobId) {
+                  pushMediaTask(creatorId, content.imageBlobId, content.imageMimeType);
+                }
+
+                if (content.videoBlobId) {
+                  pushMediaTask(creatorId, content.videoBlobId, content.videoMimeType);
+                }
+              }
+            } catch (error) {
+              console.debug("Global content prefetch skipped for creator", { creatorId, error });
+            }
+          }
+        }
+      );
+
+      await Promise.all(creatorWorkers);
+      if (cancelled || mediaTasks.length === 0) return;
+
+      const mediaWorkers = Array.from(
+        { length: Math.min(PREFETCH_MEDIA_CONCURRENCY, mediaTasks.length) },
+        async () => {
+          while (mediaTasks.length > 0 && !cancelled) {
+            const task = mediaTasks.shift();
+            if (!task) break;
+            await task();
+          }
+        }
+      );
+
+      await Promise.all(mediaWorkers);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allCreators, currentAccount?.address, decryptForPrefetch, isWalletConnected, subscribedCreatorIds, suiClient]);
 
   const goHome = () => {
     navigate("/app");
