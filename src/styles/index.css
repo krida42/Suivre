@@ -21,10 +21,30 @@
 
 body {
   @apply bg-slate-950 text-slate-100 antialiased;
-  background:
-    radial-gradient(circle at top left, #1e1b4b, #0f172a), radial-gradient(circle at bottom right, #312e81, #020617);
+  background: #020617;
   background-attachment: fixed;
   min-height: 100vh;
+}
+
+.creator-scene-bg {
+  position: fixed;
+  inset: -4%;
+  z-index: -4;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(5, 10, 18, 0.62), rgba(5, 10, 18, 0.62)),
+    url("/background.jpg");
+  background-size: cover;
+  background-position: center;
+  filter: blur(2px) saturate(1.05);
+}
+
+.creator-scene-vignette {
+  position: fixed;
+  inset: -10%;
+  z-index: -3;
+  pointer-events: none;
+  background: radial-gradient(circle, transparent 35%, rgba(5, 8, 14, 0.55) 100%);
 }
 
 /* Animated Background Blobs */

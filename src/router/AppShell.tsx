@@ -95,13 +95,20 @@ export function AppShell() {
 
   const isHomeActive = location.pathname === "/app";
   const isMyCreatorsActive = location.pathname === "/app/my-creators";
+  const shouldUseCreatorBackground =
+    location.pathname === "/app" ||
+    location.pathname === "/app/my-creators" ||
+    location.pathname.startsWith("/app/creator/") ||
+    location.pathname.startsWith("/app/content/");
 
   return (
     <div className="relative min-h-screen pb-20 overflow-hidden font-sans text-slate-100">
-      <div className="blob blob-1"></div>
-      <div className="blob blob-2"></div>
-      <div className="blob blob-3"></div>
-
+      {shouldUseCreatorBackground && (
+        <>
+          <div className="creator-scene-bg" />
+          <div className="creator-scene-vignette" />
+        </>
+      )}
       <header className="sticky top-0 z-50 w-full border-b border-white/10 glass supports-[backdrop-filter]:bg-white/5">
         <div className="container flex items-center justify-between h-16 px-4 mx-auto">
           <div className="flex items-center gap-6">
