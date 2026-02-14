@@ -191,6 +191,8 @@ function HeroSection() {
           <nav className="hidden md:flex gap-8">
             <button onClick={() => scrollToSection('creators')} className="text-white hover:text-gray-300 font-medium transition-colors">Creators</button>
             <button onClick={() => scrollToSection('how-it-works')} className="text-white hover:text-gray-300 font-medium transition-colors">How it works</button>
+            <Link to="/presentation" className="text-white hover:text-gray-300 font-medium transition-colors">Presentation</Link>
+            <a href="https://github.com/krida42/Suivre" target="_blank" rel="noopener noreferrer" className="text-white hover:text-gray-300 font-medium transition-colors">Github</a>
           </nav>
           
           {/* Center: Title */}
