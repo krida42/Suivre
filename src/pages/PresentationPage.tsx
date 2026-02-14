@@ -201,17 +201,6 @@ function Slide4() {
   );
 }
 
-function DefaultSlide({ title, content, bgColor }: { title: string, content: string, bgColor: string }) {
-  return (
-    <div className={`h-screen w-screen flex flex-col items-center justify-center text-white transition-colors duration-500 ${bgColor}`}>
-      <div className="max-w-4xl text-center p-8">
-        <h1 className="text-6xl font-bold mb-8 drop-shadow-lg">{title}</h1>
-        <p className="text-3xl leading-relaxed text-white/90 drop-shadow whitespace-pre-wrap">{content}</p>
-      </div>
-    </div>
-  );
-}
-
 export function PresentationPage() {
   const [currentSlide, setCurrentSlide] = useState(0);
 

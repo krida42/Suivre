@@ -23,6 +23,7 @@ import type { ContentCreator } from "@models/creators";
 
 const PREFETCH_CREATOR_CONCURRENCY = 2;
 const PREFETCH_MEDIA_CONCURRENCY = 4;
+const PREFETCH_DECRYPT_ON_LOAD = import.meta.env.VITE_PREFETCH_DECRYPT_ON_LOAD === "true";
 
 type AppShellRouteState = {
   creatorId?: string;
@@ -38,7 +39,7 @@ export function AppShell() {
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const { connectionStatus } = useCurrentWallet();
   const { isAuthenticated: isZkLoginConnected, isAuthLoading, logout: logoutZkLogin } = useEnokiAuth();
-  const { address: activeAddress, isConnected } = useActiveAddress();
+  const { address: activeAddress, zkLoginAddress, isConnected } = useActiveAddress();
   const currentAccount = useCurrentAccount();
   const isWalletConnected = Boolean(currentAccount?.address);
   const { data: allCreators = [] } = useGetAllCreators();
@@ -120,6 +121,7 @@ export function AppShell() {
   }, [activeAddress]);
 
   useEffect(() => {
+    if (!PREFETCH_DECRYPT_ON_LOAD) return;
     if (!isWalletConnected || !currentAccount?.address) return;
     if (!allCreators.length) return;
 
@@ -250,6 +252,10 @@ export function AppShell() {
 
   const isHomeActive = location.pathname === "/app";
   const isMyCreatorsActive = location.pathname === "/app/my-creators";
+  const shortZkLoginAddress =
+    zkLoginAddress && zkLoginAddress.length > 12
+      ? `${zkLoginAddress.slice(0, 6)}...${zkLoginAddress.slice(-4)}`
+      : zkLoginAddress;
   const shouldUseCreatorBackground =
     location.pathname === "/app" ||
     location.pathname === "/app/my-creators" ||
@@ -320,6 +326,24 @@ export function AppShell() {
                 <div className="wallet-topbar hidden sm:block [&_button]:!h-8 [&_button]:!min-h-8 [&_button]:!rounded-lg [&_button]:!border [&_button]:!border-white/10 [&_button]:!bg-white/[0.03] [&_button]:!px-2 [&_button]:!text-xs [&_button]:!font-semibold [&_button]:!text-[#f8f5ef]">
                   <ConnectButton />
                 </div>
+                {isZkLoginConnected && (
+                  <div className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-300/35 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-200 sm:text-[11px]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                    <span className="hidden md:inline">Connecte zkLogin {shortZkLoginAddress}</span>
+                    <span className="md:hidden">zkLogin</span>
+                  </div>
+                )}
+                {isZkLoginConnected && !isWalletConnected && (
+                  <Button
+                    variant="ghost"
+                    className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[10px] font-semibold text-[#f8f5ef] hover:bg-white/[0.12] sm:text-[11px]"
+                    onClick={() => {
+                      void logoutZkLogin();
+                    }}
+                  >
+                    Deconnexion
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -350,18 +374,7 @@ export function AppShell() {
                           {creatorContext.pricePerMonth ? `${creatorContext.pricePerMonth} SUI / mois` : "Prix inconnu"}
                         </p>
                       </div>
-                      {isZkLoginConnected && !isWalletConnected && (
-              <Button
-                variant="ghost"
-                className="hidden sm:flex text-slate-300 hover:text-white hover:bg-white/10"
-                onClick={() => {
-                  void logoutZkLogin();
-                }}
-              >
-                Deconnexion zkLogin
-              </Button>
-            )}
-            <Button
+                      <Button
                         variant={isSubscribedToCreatorContext ? "outline" : "accent"}
                         className="h-7 px-2.5 text-[11px] border-[rgba(250,235,201,0.28)] text-[#f8f5ef] shrink-0"
                         onClick={handleCreatorTopbarSubscribe}
