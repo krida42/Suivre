@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ChangeEvent } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { LayoutGrid, Upload } from "lucide-react";
 import { Button, Card, CardContent } from "@ui";
 import { useEncryptAndUploadWalrus } from "@hooks/useEncryptAndUploadWalrus";
@@ -18,11 +19,19 @@ interface PublishContentPageProps {
   }) => Promise<{ digest: string }>;
 }
 
+function sameAddress(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
 export function PublishContentPage({ dashboardStats, handleUpload }: PublishContentPageProps) {
-  const getCreators = useGetAllCreators();
-  const [creators, setCreators] = useState<ContentCreator[]>([]);
-  const [selectedCreatorId, setSelectedCreatorId] = useState("");
-  const [isLoadingCreators, setIsLoadingCreators] = useState(false);
+  const currentAccount = useCurrentAccount();
+  const { data: allCreators = [], isLoading: isLoadingCreators, error: creatorsError } = useGetAllCreators();
+
+  const creators: ContentCreator[] = currentAccount?.address
+    ? allCreators.filter((creator) => sameAddress(creator.owner, currentAccount.address))
+    : [];
+
+  const [manuallySelectedCreatorId, setManuallySelectedCreatorId] = useState("");
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -33,31 +42,10 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
   const [suiDigest, setSuiDigest] = useState<string | null>(null);
   const { encryptAndUpload, isUploading } = useEncryptAndUploadWalrus();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function fetchCreators() {
-      try {
-        setIsLoadingCreators(true);
-        const data = await getCreators();
-        if (!isMounted) return;
-        setCreators(data);
-        setSelectedCreatorId((prev) => prev || data[0]?.id || "");
-      } catch (error) {
-        console.error("Erreur lors du chargement des createurs", error);
-      } finally {
-        if (isMounted) {
-          setIsLoadingCreators(false);
-        }
-      }
-    }
-
-    void fetchCreators();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [getCreators]);
+  const selectedCreatorId =
+    manuallySelectedCreatorId && creators.some((creator) => creator.id === manuallySelectedCreatorId)
+      ? manuallySelectedCreatorId
+      : creators[0]?.id ?? "";
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -65,13 +53,14 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
     if (!file) return;
 
     if (!selectedCreatorId) {
-      console.warn("Aucun createur selectionne pour generer la policy Walrus.");
+      setFormError("Aucun createur selectionne pour generer la policy Walrus.");
       return;
     }
 
     setSelectedFileName(file.name);
     setBlobId(null);
     setWalrusError(null);
+    setFormError(null);
 
     encryptAndUpload(file, selectedCreatorId)
       .then((storageInfo) => {
@@ -146,17 +135,15 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
           </h1>
         </div>
         <div className="w-full">
-          <label className="block mb-1 text-sm font-medium text-slate-200">Selectionnez un createur</label>
+          <label className="block mb-1 text-sm font-medium text-slate-200">Selectionnez votre createur</label>
           <select
             className="w-full p-2 text-sm border rounded-xl outline-none border-white/10 bg-white/5 text-slate-200 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/30 disabled:text-slate-500"
             value={selectedCreatorId}
-            onChange={(event) => setSelectedCreatorId(event.target.value)}
+            onChange={(event) => setManuallySelectedCreatorId(event.target.value)}
             disabled={isLoadingCreators || creators.length === 0}
           >
             {isLoadingCreators && <option className="bg-slate-900">Chargement...</option>}
-            {!isLoadingCreators && creators.length === 0 && (
-              <option className="bg-slate-900">Aucun createur trouve</option>
-            )}
+            {!isLoadingCreators && creators.length === 0 && <option className="bg-slate-900">Aucun createur trouve</option>}
             {!isLoadingCreators &&
               creators.map((creator) => (
                 <option key={creator.id} value={creator.id} className="bg-slate-900">
@@ -164,6 +151,12 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
                 </option>
               ))}
           </select>
+          {creatorsError && <p className="mt-1 text-xs text-red-400">Impossible de charger les createurs.</p>}
+          {!isLoadingCreators && creators.length === 0 && (
+            <p className="mt-1 text-xs text-slate-400">
+              Creez d'abord votre profil createur avec ce wallet pour publier du contenu.
+            </p>
+          )}
         </div>
       </div>
 
@@ -210,9 +203,7 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               ></textarea>
-              {hasTriedSubmit && !description.trim() && (
-                <p className="mt-1 text-xs text-red-400">La description est requise.</p>
-              )}
+              {hasTriedSubmit && !description.trim() && <p className="mt-1 text-xs text-red-400">La description est requise.</p>}
             </div>
 
             <label className="flex flex-col items-center justify-center gap-4 p-8 transition-all border-2 border-dashed rounded-xl cursor-pointer border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 group">
@@ -246,7 +237,7 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
             </label>
 
             <div className="pt-2">
-              <Button variant="accent" className="w-full" onClick={handleSubmitClick} disabled={isUploading}>
+              <Button variant="accent" className="w-full" onClick={handleSubmitClick} disabled={isUploading || creators.length === 0}>
                 Mettre en ligne
               </Button>
               {formError && <p className="mt-2 text-xs text-red-400">{formError}</p>}

@@ -1,5 +1,6 @@
 import type { Creator } from "@models/domain";
 import type { ContentCreator } from "@models/creators";
+import { formatMistToSui } from "@utils/sui/amount";
 
 export function mapCreatorToProfile(creator: ContentCreator): Creator {
   const first = creator.pseudo.charAt(0);
@@ -16,6 +17,6 @@ export function mapCreatorToProfile(creator: ContentCreator): Creator {
     subscribers: "0",
     isVerified: false,
     videos: [],
-    pricePerMonth: Number(creator.price_per_month).toFixed(2) || "0",
+    pricePerMonth: formatMistToSui(creator.price_per_month, 9),
   };
 }

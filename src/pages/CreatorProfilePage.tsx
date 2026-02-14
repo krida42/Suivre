@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { Button, Badge } from "@ui";
 import { useGetCreatorContent } from "@hooks/useGetCreatorContent";
@@ -22,45 +21,11 @@ export function CreatorProfilePage({
   subscribeError,
   goToContent,
 }: CreatorProfilePageProps) {
-  const getCreatorContent = useGetCreatorContent();
-  const [contents, setContents] = useState<CreatorContent[]>([]);
-  const [isLoadingContents, setIsLoadingContents] = useState(false);
-  const [contentsError, setContentsError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!activeCreator?.id) {
-      console.warn("CreatorProfilePage mounted without a valid activeCreator.id");
-      setContents([]);
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadContents = async () => {
-      try {
-        setIsLoadingContents(true);
-        setContentsError(null);
-        const data = await getCreatorContent(activeCreator.id);
-        if (!isMounted) return;
-        setContents(data);
-      } catch (error) {
-        console.error("Erreur lors du chargement des contenus du createur", error);
-        if (isMounted) {
-          setContentsError("Impossible de charger les contenus de ce createur.");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingContents(false);
-        }
-      }
-    };
-
-    void loadContents();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [activeCreator?.id, getCreatorContent]);
+  const {
+    data: contents = [],
+    isLoading: isLoadingContents,
+    error: contentsError,
+  } = useGetCreatorContent(activeCreator?.id);
 
   return (
     <div className="duration-500 animate-in slide-in-from-bottom-4">
@@ -88,7 +53,12 @@ export function CreatorProfilePage({
             </div>
           </div>
           <div className="flex w-full gap-3 mb-2 md:w-auto">
-            <Button variant={isSubscribed ? "outline" : "accent"} className="flex-1 md:flex-none" onClick={handleSubscribe} disabled={isSubscribed || isSubscribing}>
+            <Button
+              variant={isSubscribed ? "outline" : "accent"}
+              className="flex-1 md:flex-none"
+              onClick={handleSubscribe}
+              disabled={isSubscribed || isSubscribing}
+            >
               {isSubscribed
                 ? "Abonne"
                 : `S'abonner - ${activeCreator.pricePerMonth ? `${activeCreator.pricePerMonth} SUI/mois` : "Prix inconnu"}`}
@@ -119,7 +89,7 @@ export function CreatorProfilePage({
             <span>Chargement des contenus...</span>
           </div>
         ) : contentsError ? (
-          <p className="py-6 text-sm text-center text-red-400">{contentsError}</p>
+          <p className="py-6 text-sm text-center text-red-400">Impossible de charger les contenus de ce createur.</p>
         ) : contents.length === 0 ? (
           <p className="py-6 text-sm text-center text-slate-400">Aucun contenu publie pour le moment.</p>
         ) : (
@@ -139,9 +109,7 @@ export function CreatorProfilePage({
                   {content.contentName || "Contenu sans titre"}
                 </h4>
                 <p className="mt-1 text-xs text-slate-400 line-clamp-3">{content.contentDescription}</p>
-                <p className="mt-1 text-[10px] text-slate-500 break-all font-mono">
-                  blobId: {content.blobId.slice(0, 10)}...
-                </p>
+                <p className="mt-1 text-[10px] text-slate-500 break-all font-mono">blobId: {content.blobId.slice(0, 10)}...</p>
               </div>
             ))}
           </div>

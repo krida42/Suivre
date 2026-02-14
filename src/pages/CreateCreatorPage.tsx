@@ -5,6 +5,8 @@ import { useCurrentAccount, useSignAndExecuteTransaction, ConnectButton } from "
 import { Transaction } from "@mysten/sui/transactions";
 import { Button, Card, CardContent } from "@ui";
 import { ALL_CREATOR_OBJECT_ID, CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
+import { mutateAsync } from "@utils/sui/mutateAsync";
+import { parseSuiToMist } from "@utils/sui/amount";
 
 export function CreateCreatorPage() {
   const currentAccount = useCurrentAccount();
@@ -16,6 +18,7 @@ export function CreateCreatorPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [submitStep, setSubmitStep] = useState<"idle" | "transaction">("idle");
   const [txDigest, setTxDigest] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const isSubmitting = submitStep !== "idle";
 
   const createCreatorOnBlockchain = async ({
@@ -28,36 +31,43 @@ export function CreateCreatorPage() {
     nextDescription: string;
     nextSubscribePrice: string;
     blobId: string;
-  }) => {
+  }): Promise<string> => {
+    const amountInMist = parseSuiToMist(nextSubscribePrice);
+    if (amountInMist === null) {
+      throw new Error("Le prix doit etre un nombre valide (jusqu'a 9 decimales).");
+    }
+
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${CONTENT_CREATOR_PACKAGE_ID}::content_creator::new`,
       arguments: [
         tx.object(ALL_CREATOR_OBJECT_ID),
-        tx.pure.string(nextName),
-        tx.pure.u64(Math.floor(parseFloat(nextSubscribePrice))),
-        tx.pure.string(nextDescription),
-        tx.pure.string(blobId),
+        tx.pure.string(nextName.trim()),
+        tx.pure.u64(amountInMist),
+        tx.pure.string(nextDescription.trim()),
+        tx.pure.string(blobId.trim()),
       ],
     });
 
-    signAndExecuteTransaction(
+    const result = await mutateAsync<{ transaction: Transaction }, { digest: string }>(
+      signAndExecuteTransaction as unknown as (
+        variables: { transaction: Transaction },
+        callbacks: {
+          onSuccess: (result: { digest: string }) => void;
+          onError: (error: unknown) => void;
+        }
+      ) => void,
       {
         transaction: tx,
-      },
-      {
-        onSuccess: (result: { digest: string }) => {
-          setTxDigest(result.digest);
-          setSubmitStep("idle");
-        },
-        onError: (error: Error) => {
-          console.error("Transaction failed:", error);
-          alert(`Erreur lors de la creation sur la blockchain: ${error.message}`);
-          setSubmitStep("idle");
-        },
       }
     );
+
+    if (!result.digest) {
+      throw new Error("Digest de transaction manquant.");
+    }
+
+    return result.digest;
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -65,22 +75,26 @@ export function CreateCreatorPage() {
 
     if (isSubmitting) return;
 
-    if (!imageUrl) {
-      alert("Veuillez saisir une URL d'image.");
+    setSubmitError(null);
+
+    if (!imageUrl.trim()) {
+      setSubmitError("Veuillez saisir une URL d'image.");
       return;
     }
 
     try {
       setSubmitStep("transaction");
-      await createCreatorOnBlockchain({
+      const digest = await createCreatorOnBlockchain({
         nextName: name,
         nextDescription: description,
         nextSubscribePrice: subscribePrice,
         blobId: imageUrl,
       });
+      setTxDigest(digest);
     } catch (err) {
-      console.error("Error preparing upload:", err);
-      alert("Erreur lors de la creation sur la blockchain.");
+      console.error("Error while creating creator profile", err);
+      setSubmitError(err instanceof Error ? err.message : "Erreur lors de la creation sur la blockchain.");
+    } finally {
       setSubmitStep("idle");
     }
   };
@@ -192,7 +206,10 @@ export function CreateCreatorPage() {
                   />
                   <span className="absolute left-3 top-2 text-slate-400">SUI</span>
                 </div>
+                <p className="mt-1 text-xs text-slate-400">Conversion automatique en MIST pour l'ecriture on-chain.</p>
               </div>
+
+              {submitError && <p className="text-sm text-red-400">{submitError}</p>}
 
               <div className="pt-4">
                 <Button
@@ -203,7 +220,7 @@ export function CreateCreatorPage() {
                 >
                   {isSubmitting ? (
                     <span className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />{" "}
+                      <Loader2 className="w-5 h-5 animate-spin" />
                       {submitStep === "transaction" ? "Transaction en cours..." : "Creation en cours..."}
                     </span>
                   ) : (

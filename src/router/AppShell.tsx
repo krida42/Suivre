@@ -4,7 +4,6 @@ import { User, Play, Upload } from "lucide-react";
 import { ConnectButton, useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
 import { AppRoutes } from "@router/AppRoutes";
 import { ConnectWalletPage } from "@pages/ConnectWalletPage";
-import { api } from "@services/mockApi";
 import { useUserSubscriptions } from "@hooks/useUserSubscriptions";
 import { useGetOwnedObjects } from "@hooks/useGetOwnedObjects";
 import { Button } from "@ui";
@@ -50,17 +49,21 @@ export function AppShell() {
   }, [subscriptions]);
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const userData = await api.getCurrentUser();
-        setCurrentUser(userData);
-      } catch (error) {
-        console.error("Failed to load initial data", error);
-      }
-    };
+    if (!currentAccount?.address) {
+      setCurrentUser(null);
+      return;
+    }
 
-    void init();
-  }, []);
+    setCurrentUser((previous) => ({
+      id: previous?.id ?? currentAccount.address,
+      name: previous?.name ?? "Utilisateur Sui",
+      email: previous?.email ?? `${currentAccount.address.slice(0, 8)}...@wallet.local`,
+      avatarUrl: previous?.avatarUrl ?? "",
+      isVerified: previous?.isVerified ?? true,
+      unlockedVideoIds: previous?.unlockedVideoIds ?? [],
+      subscribedCreatorIds: previous?.subscribedCreatorIds ?? [],
+    }));
+  }, [currentAccount?.address]);
 
   const goHome = () => {
     navigate("/app");
@@ -73,14 +76,7 @@ export function AppShell() {
     }
 
     if (typeof arg === "string") {
-      try {
-        const creator = await api.getCreator(arg);
-        if (creator) {
-          navigate(`/app/creator/${creator.id}`, { state: { premappedCreator: creator } });
-        }
-      } catch (error) {
-        console.error("Creator lookup failed", error);
-      }
+      navigate(`/app/creator/${arg}`);
     }
   };
 

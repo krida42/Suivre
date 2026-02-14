@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import type { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
+import { mutateAsync } from "@utils/sui/mutateAsync";
+import { getObjectFields } from "@utils/sui/objectParsing";
 
 type SubscribeArgs = {
   creatorId: string;
@@ -14,9 +17,13 @@ type UseSubscribeToCreatorReturn = {
   error: string | null;
 };
 
+type ExecuteTransactionResult = {
+  digest: string;
+};
+
 export function useSubscribeToCreator(): UseSubscribeToCreatorReturn {
   const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
+  const suiClient = useSuiClient() as SuiClient;
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
   const [isSubscribing, setIsSubscribing] = useState(false);
@@ -38,13 +45,14 @@ export function useSubscribeToCreator(): UseSubscribeToCreatorReturn {
         },
       });
 
-      const fields = (creatorObject.data?.content as { fields?: Record<string, unknown> } | null)?.fields;
+      const fields = getObjectFields(creatorObject.data?.content);
       const priceField = fields?.price_per_month;
 
-      if (!priceField) {
+      if (priceField == null) {
         throw new Error("Unable to read creator price_per_month from on-chain object");
       }
 
+      // On-chain price is stored in MIST (u64), so we use it directly as split amount.
       const pricePerMonth = BigInt(String(priceField));
       const tx = new Transaction();
 
@@ -55,27 +63,24 @@ export function useSubscribeToCreator(): UseSubscribeToCreatorReturn {
         arguments: [feeCoin, tx.object(creatorId), tx.object(SUI_CLOCK_OBJECT_ID)],
       });
 
-      let txDigest: string | null = null;
-
-      await new Promise<void>((resolve, reject) => {
-        signAndExecuteTransaction(
-          { transaction: tx },
-          {
-            onSuccess: (result: { digest: string }) => {
-              txDigest = result.digest;
-              resolve();
-            },
-            onError: (err: Error) => reject(err),
+      const result = await mutateAsync<{ transaction: Transaction }, ExecuteTransactionResult>(
+        signAndExecuteTransaction as unknown as (
+          variables: { transaction: Transaction },
+          callbacks: {
+            onSuccess: (result: ExecuteTransactionResult) => void;
+            onError: (error: unknown) => void;
           }
-        );
-      });
+        ) => void,
+        { transaction: tx }
+      );
 
-      if (!txDigest) {
+      if (!result.digest) {
         throw new Error("Subscription transaction digest not found");
       }
 
+      // We wait for final effects to surface on-chain failures that can happen after signature.
       const txResult = await suiClient.waitForTransaction({
-        digest: txDigest,
+        digest: result.digest,
         options: {
           showEffects: true,
         },

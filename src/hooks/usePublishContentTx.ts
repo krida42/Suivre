@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import type { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
+import { mutateAsync } from "@utils/sui/mutateAsync";
+import { getObjectFields } from "@utils/sui/objectParsing";
 
 type PublishContentArgs = {
   title: string;
   description: string;
   blobId: string;
+  creatorId: string;
 };
 
 type UsePublishContentTxReturn = {
@@ -15,23 +19,46 @@ type UsePublishContentTxReturn = {
   error: string | null;
 };
 
+type ExecuteTransactionResult = {
+  digest: string;
+};
+
 export function usePublishContentTx(): UsePublishContentTxReturn {
   const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
+  const suiClient = useSuiClient() as SuiClient;
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const publishContent = async ({ title, description, blobId }: PublishContentArgs): Promise<{ digest: string }> => {
+  const publishContent = async ({ title, description, blobId, creatorId }: PublishContentArgs): Promise<{ digest: string }> => {
     if (!currentAccount?.address) {
       throw new Error("Wallet not connected");
+    }
+
+    if (!creatorId) {
+      throw new Error("Creator ID is required");
     }
 
     setIsPublishing(true);
     setError(null);
 
     try {
+      const creatorObject = await suiClient.getObject({
+        id: creatorId,
+        options: {
+          showContent: true,
+        },
+      });
+
+      const creatorFields = getObjectFields(creatorObject.data?.content);
+      const creatorWallet = String(creatorFields?.wallet ?? "").toLowerCase();
+
+      // Security guard: publishing is allowed only for creator objects owned by the connected wallet.
+      if (!creatorWallet || creatorWallet !== currentAccount.address.toLowerCase()) {
+        throw new Error("Selected creator does not belong to the connected wallet");
+      }
+
       const ownedCaps = await suiClient.getOwnedObjects({
         owner: currentAccount.address,
         filter: {
@@ -44,6 +71,7 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
 
       const creatorCapId = ownedCaps.data[0]?.data?.objectId;
 
+      // Current Move contract uses one CreatorCap per creator wallet.
       if (!creatorCapId) {
         throw new Error("No CreatorCap found for the current wallet");
       }
@@ -52,34 +80,25 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
 
       tx.moveCall({
         target: `${CONTENT_CREATOR_PACKAGE_ID}::content_creator::upload_content`,
-        arguments: [
-          tx.object(creatorCapId),
-          tx.pure.string(title),
-          tx.pure.string(description),
-          tx.pure.string(blobId),
-        ],
+        arguments: [tx.object(creatorCapId), tx.pure.string(title), tx.pure.string(description), tx.pure.string(blobId)],
       });
 
-      let txDigest: string | null = null;
-
-      await new Promise<void>((resolve, reject) => {
-        signAndExecuteTransaction(
-          { transaction: tx },
-          {
-            onSuccess: (result: { digest: string }) => {
-              txDigest = result.digest;
-              resolve();
-            },
-            onError: (err: Error) => reject(err),
+      const result = await mutateAsync<{ transaction: Transaction }, ExecuteTransactionResult>(
+        signAndExecuteTransaction as unknown as (
+          variables: { transaction: Transaction },
+          callbacks: {
+            onSuccess: (result: ExecuteTransactionResult) => void;
+            onError: (error: unknown) => void;
           }
-        );
-      });
+        ) => void,
+        { transaction: tx }
+      );
 
-      if (!txDigest) {
+      if (!result.digest) {
         throw new Error("Transaction digest missing after upload_content execution");
       }
 
-      return { digest: txDigest };
+      return { digest: result.digest };
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error while uploading content";
       setError(message);

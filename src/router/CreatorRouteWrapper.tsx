@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CreatorProfilePage } from "@pages/CreatorProfilePage";
 import { useUserSubscriptions } from "@hooks/useUserSubscriptions";
 import { useSubscribeToCreator } from "@hooks/useSubscribeToCreator";
+import { useGetCreatorById } from "@hooks/useGetCreatorById";
 import { mapCreatorToProfile } from "@mappers/mapCreatorToProfile";
 import type { Creator } from "@models/domain";
 import type { ContentCreator } from "@models/creators";
@@ -19,13 +20,14 @@ export function CreatorRouteWrapper() {
   const navigate = useNavigate();
   const { subscriptions, refetch: refetchSubscriptions } = useUserSubscriptions();
   const { subscribeToCreator, isSubscribing, error: subscribeHookError } = useSubscribeToCreator();
+  const { data: fetchedCreator, isLoading: isLoadingCreatorById } = useGetCreatorById(id);
   const [subscribeActionError, setSubscribeActionError] = useState<string | null>(null);
   const state = location.state as CreatorRouteState;
 
   const activeCreator: Creator | null = (() => {
     if (state?.premappedCreator) return state.premappedCreator;
     if (state?.creator) return mapCreatorToProfile(state.creator);
-    if (id) return null;
+    if (fetchedCreator) return mapCreatorToProfile(fetchedCreator);
     return null;
   })();
 
@@ -51,8 +53,12 @@ export function CreatorRouteWrapper() {
     });
   };
 
+  if (isLoadingCreatorById && !activeCreator) {
+    return <div className="p-8 text-center text-slate-400">Chargement du createur...</div>;
+  }
+
   if (!activeCreator) {
-    return <div className="p-8 text-center text-slate-400">Chargement du createur... ou donnees manquantes.</div>;
+    return <div className="p-8 text-center text-slate-400">Createur introuvable ou donnees manquantes.</div>;
   }
 
   return (

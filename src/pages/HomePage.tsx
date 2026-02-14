@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button, Card, CardContent } from "@ui";
 import { useGetAllCreators } from "@hooks/useGetAllCreators";
@@ -9,35 +8,7 @@ interface HomePageProps {
 }
 
 export function HomePage({ goToCreator }: HomePageProps) {
-  const getCreators = useGetAllCreators();
-  const [creators, setCreators] = useState<ContentCreator[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function fetchCreators() {
-      try {
-        setIsLoading(true);
-        const data = await getCreators();
-
-        if (!isMounted) return;
-        setCreators(data);
-      } catch (error) {
-        console.error("Erreur lors du chargement des createurs pour la home", error);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void fetchCreators();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [getCreators]);
+  const { data: creators = [], isLoading, error } = useGetAllCreators();
 
   return (
     <div className="space-y-8">
@@ -52,6 +23,8 @@ export function HomePage({ goToCreator }: HomePageProps) {
         <div className="flex justify-center py-20">
           <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
         </div>
+      ) : error ? (
+        <div className="py-12 text-center text-red-400">Impossible de charger les createurs pour le moment.</div>
       ) : creators.length === 0 ? (
         <div className="py-12 text-center text-slate-400">Aucun createur trouve pour ce wallet.</div>
       ) : (
