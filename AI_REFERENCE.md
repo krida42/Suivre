@@ -143,6 +143,7 @@ Routes metier:
 - `CONTENT_CREATOR_PACKAGE_ID`
 - `ALL_CREATOR_OBJECT_ID`
 - Valeurs par defaut si env non definies.
+- Sanitization defensive des IDs env (`0x...`) pour eviter les erreurs de parsing (`quotes`, `;`, espaces).
 
 ### `src/config/storage.ts`
 Centralise config Walrus/Seal:
@@ -238,10 +239,11 @@ Exports:
 - `useGetCreatorContent(creatorId)`
 
 Fonctionnement:
-1. Lit l'objet createur pour trouver `wallet` owner.
-2. Strategie A: `getOwnedObjects` filtre `StructType ...::Content`.
-3. Strategie B fallback: lit tous les objets owner et filtre localement le type.
-4. Mappe en `CreatorContent[]`.
+1. Lit l'objet createur pour trouver `contents` (table on-chain) + metadata type/package.
+2. Strategie principale: parcourt `creator.contents` via dynamic fields, resolve les `content_id`, puis charge les objets `Content`.
+3. Filtre les objets par suffixe de type `::content_creator::Content`.
+4. Fallback compatibilite: ancien modele wallet-owner (`getOwnedObjects` + filtre type).
+5. Mappe en `CreatorContent[]`.
 
 ### `src/hooks/useUserSubscriptions.ts`
 - `useUserSubscriptions()`:
@@ -261,8 +263,8 @@ Pipeline:
 1. Verifie wallet connecte.
 2. Verifie `creatorId` present.
 3. Lit objet createur et verifie qu'il appartient au wallet connecte.
-4. Trouve `CreatorCap` dans les objets wallet.
-5. Construit tx Move `upload_content`.
+4. Trouve le `CreatorCap` du wallet qui matche exactement `creator_id == creatorId`.
+5. Construit tx Move `upload_content(cap, creator, content_name, content_description, blob_id)`.
 6. Signe/execut e via wallet.
 
 ### `src/hooks/useSubscribeToCreator.ts`
@@ -370,10 +372,17 @@ Gestion erreurs:
 Module `sui_fan::content_creator`:
 - `new(...)`:
   - cree `ContentCreator`,
+  - initialise `contents: Table<u64, ID>` + `content_count`,
   - cree/transfere `CreatorCap`,
+  - lie `CreatorCap.creator_id` au creator,
   - enregistre createur dans `AllCreators`.
-- `upload_content(_cap, ...)`:
-  - cree objet `Content` et le transfere au wallet createur.
+- `assert_creator_access(cap, creator, sender)`:
+  - utilitaire de checks d'autorisation (cap lie au creator + owner wallet).
+- `upload_content(cap, creator, ...)`:
+  - appelle `assert_creator_access`,
+  - cree `Content` avec `creator_id`,
+  - ajoute l'ID du contenu dans `creator.contents`,
+  - partage l'objet `Content` (pas de transfer au wallet).
 - `subscribe(fee, creator, clock, ctx)`:
   - verifie `fee.value == price_per_month`,
   - transfere fee au wallet createur,
@@ -436,7 +445,8 @@ Scripts principaux:
 1. UI selectionne createur du wallet courant.
 2. Fichier chiffre via Seal.
 3. Blob chiffre stocke Walrus -> recup blobId.
-4. tx `content_creator::upload_content` avec `CreatorCap`.
+4. tx `content_creator::upload_content` avec `CreatorCap` + `ContentCreator`.
+5. On-chain indexe le content dans `creator.contents` (source canonique de lecture).
 
 ### Abonnement
 1. Utilisateur ouvre profil createur.
