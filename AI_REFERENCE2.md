@@ -51,6 +51,9 @@ Stack metier:
 ## 3. Arborescence utile
 
 ```text
+public/
+  fonts/
+  videos/
 src/
   config/
   hooks/
@@ -106,12 +109,17 @@ Responsabilites:
 ### `src/router/AppRoutes.tsx`
 Routes metier:
 - `/app` -> `HomePage`
+- `/app/my-creators` -> `MyCreatorsRouteWrapper`
 - `/app/creator/:id` -> `CreatorRouteWrapper`
 - `/app/content/:id` -> `ContentRouteWrapper`
 - `/app/publish` -> `PublishRouteWrapper`
 - `/app/create-profile` -> `CreateCreatorPage`
 - `/app/account` -> `AccountPage`
 - `/app/video/:id` -> `VideoRouteWrapper` (legacy mock)
+
+### `src/router/MyCreatorsRouteWrapper.tsx`
+- Rend `MyCreatorsPage`.
+- Gere la navigation vers le profil createur.
 
 ### `src/router/CreatorRouteWrapper.tsx`
 - Resolve le createur actif via priorite:
@@ -252,6 +260,13 @@ Fonctionnement:
 ### `src/hooks/useGetOwnedObjects.ts`
 - helper generique pour objets wallet (showContent + showType).
 
+### `src/hooks/useGetMyCreators.ts`
+- `useGetMyCreators()`:
+  - recupere les abonnements actifs (`Subscription`) du wallet courant via `getOwnedObjects`.
+  - extrait les `creator_id`.
+  - deduplique et fetch les details des createurs (`multiGetObjects`).
+  - retourne liste `ContentCreator[]`.
+
 ## 11. Hooks - transactions on-chain
 
 ### `src/hooks/usePublishContentTx.ts`
@@ -304,7 +319,11 @@ Gestion erreurs:
 ## 12. Pages UI
 
 ### `src/pages/LandingPage.tsx`
-- page d'atterrissage (CTA vers `/app`).
+- Page d'accueil immersive :
+  - Background video (rotation 4 videos dans `public/videos`).
+  - Header sticky (Navigation, Logo, "Open Application").
+  - Messages type "Typewriter" avec police "Oracle" (`public/fonts`).
+  - CTA principal vers `/app`.
 
 ### `src/pages/ConnectWalletPage.tsx`
 - ecran connexion wallet.
@@ -312,6 +331,10 @@ Gestion erreurs:
 ### `src/pages/HomePage.tsx`
 - liste createurs (query `useGetAllCreators`).
 - navigation vers profil createur.
+
+### `src/pages/MyCreatorsPage.tsx`
+- liste des createurs auxquels l'utilisateur est abonne (query `useGetMyCreators`).
+- affichage sous forme de grid de cartes.
 
 ### `src/pages/CreatorProfilePage.tsx`
 - header createur, bouton abonnement, liste contenus du createur.
@@ -330,7 +353,8 @@ Gestion erreurs:
 ### `src/pages/CreateCreatorPage.tsx`
 - formulaire creation profil createur.
 - convertit prix SUI -> MIST.
-- tx Move `new`.
+- tx Move `newutilisateur.
+- affiche la liste des abonnements actifs via `useGetMyCreators`
 - affiche digest de confirmation.
 
 ### `src/pages/AccountPage.tsx`
@@ -352,6 +376,7 @@ Gestion erreurs:
 
 ### `src/ui/index.ts`
 - barrel exports UI.
+- declaration font custom "Oracle".
 
 ### `src/styles/index.css`
 - theme global, blobs animes, glassmorphism, scrollbar custom.

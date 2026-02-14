@@ -134,7 +134,7 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
             Uploader du contenu
           </h1>
         </div>
-        <div className="w-full">
+        {/* <div className="w-full">
           <label className="block mb-1 text-sm font-medium text-slate-200">Selectionnez votre createur</label>
           <select
             className="w-full p-2 text-sm border rounded-xl outline-none border-white/10 bg-white/5 text-slate-200 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/30 disabled:text-slate-500"
@@ -157,7 +157,7 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
               Creez d'abord votre profil createur avec ce wallet pour publier du contenu.
             </p>
           )}
-        </div>
+        </div> */}
       </div>
 
       {dashboardStats && (

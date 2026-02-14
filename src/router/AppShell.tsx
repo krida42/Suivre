@@ -94,6 +94,7 @@ export function AppShell() {
   }
 
   const isHomeActive = location.pathname === "/app";
+  const isMyCreatorsActive = location.pathname === "/app/my-creators";
 
   return (
     <div className="relative min-h-screen pb-20 overflow-hidden font-sans text-slate-100">
@@ -109,7 +110,7 @@ export function AppShell() {
                 <Play className="w-5 h-5 text-white fill-current" />
               </div>
               <span className="text-xl font-bold tracking-tight text-white transition-colors group-hover:text-indigo-300">
-                SuiFan
+                Suivre
               </span>
             </div>
 
@@ -119,6 +120,12 @@ export function AppShell() {
                 className={`hover:text-white transition-colors ${isHomeActive ? "text-white font-semibold" : ""}`}
               >
                 Decouvrir
+              </button>
+              <button
+                onClick={() => navigate("/app/my-creators")}
+                className={`hover:text-white transition-colors ${isMyCreatorsActive ? "text-white font-semibold" : ""}`}
+              >
+                Mes abonnements
               </button>
             </nav>
           </div>

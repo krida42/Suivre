@@ -9,6 +9,7 @@ import { PublishRouteWrapper } from "@router/PublishRouteWrapper";
 import { VideoRouteWrapper } from "@router/VideoRouteWrapper";
 import type { ContentCreator } from "@models/creators";
 import type { User } from "@models/domain";
+import { MyCreatorsRouteWrapper } from "./MyCreatorsRouteWrapper";
 
 interface AppRoutesProps {
   currentUser: User | null;
@@ -22,6 +23,7 @@ export function AppRoutes({ currentUser, setCurrentUser, goHome, goToCreator, is
   return (
     <Routes>
       <Route index element={<HomePage goToCreator={(creator) => goToCreator(creator)} />} />
+      <Route path="my-creators" element={<MyCreatorsRouteWrapper />} />
       <Route path="creator/:id" element={<CreatorRouteWrapper />} />
       <Route
         path="video/:id"

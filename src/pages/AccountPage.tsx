@@ -1,13 +1,18 @@
-import { User as UserIcon, ShieldCheck } from "lucide-react";
+import { User as UserIcon, ShieldCheck, Loader2 } from "lucide-react";
 import { Badge, Card } from "@ui";
 import type { User } from "@models/domain";
+import { useGetMyCreators } from "@hooks/useGetMyCreators";
+import { useNavigate } from "react-router-dom";
 
 interface AccountPageProps {
   currentUser: User | null;
   isSubscribed: boolean;
 }
 
-export function AccountPage({ currentUser, isSubscribed }: AccountPageProps) {
+export function AccountPage({ currentUser }: AccountPageProps) {
+  const navigate = useNavigate();
+  const { data: creators = [], isLoading } = useGetMyCreators();
+
   const initials = currentUser?.name
     ? currentUser.name
         .split(" ")
@@ -39,23 +44,39 @@ export function AccountPage({ currentUser, isSubscribed }: AccountPageProps) {
           <h2 className="flex items-center gap-2 mb-4 text-lg font-bold text-white">
             <UserIcon className="w-5 h-5 text-indigo-400" /> Abonnements
           </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card className="flex items-center gap-4 p-4 transition-all cursor-pointer hover:border-indigo-500/50 hover:bg-white/10 glass-panel border-white/10">
-              <div className="w-12 h-12 overflow-hidden rounded-full bg-slate-800">
-                <img
-                  src="https://placehold.co/100x100/6366f1/ffffff"
-                  alt="Creator avatar"
-                  className="object-cover w-full h-full"
-                />
-              </div>
-              <div>
-                <h4 className="font-semibold text-white">{isSubscribed ? "Abonnement actif" : "Aucun abonnement"}</h4>
-                <p className="flex items-center gap-1 text-xs font-medium text-green-400">
-                  <ShieldCheck className="w-3 h-3" /> {isSubscribed ? "Actif" : "Inactif"}
-                </p>
-              </div>
-            </Card>
-          </div>
+          {isLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+            </div>
+          ) : creators.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {creators.map((creator) => (
+                <Card
+                  key={creator.id}
+                  className="flex items-center gap-4 p-4 transition-all cursor-pointer hover:border-indigo-500/50 hover:bg-white/10 glass-panel border-white/10"
+                  onClick={() => navigate(`/app/creator/${creator.id}`)}
+                >
+                  <div className="w-12 h-12 overflow-hidden rounded-full bg-slate-800">
+                    <img
+                      src={creator.image_url || "https://avatar.iran.liara.run/public"}
+                      alt={creator.pseudo}
+                      className="object-cover w-full h-full"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-white">{creator.pseudo}</h4>
+                    <p className="flex items-center gap-1 text-xs font-medium text-green-400">
+                      <ShieldCheck className="w-3 h-3" /> Abonné
+                    </p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 text-center border rounded-lg border-white/10 bg-white/5 text-slate-400">
+              Aucun abonnement actif.
+            </div>
+          )}
         </section>
       </div>
     </div>

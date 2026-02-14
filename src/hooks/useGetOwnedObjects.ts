@@ -19,6 +19,8 @@ export function useGetOwnedObjects() {
       },
     });
 
+    console.log(res.data)
+
     return res.data || [];
   }, [suiClient, currentAccount]);
 }
