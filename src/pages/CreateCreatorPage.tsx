@@ -4,7 +4,7 @@ import { User, Loader2, CheckCircle2 } from "lucide-react";
 import { useSignAndExecuteTransaction, useSignTransaction, useSuiClient, ConnectButton } from "@mysten/dapp-kit";
 import type { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
-import { Button, Card, CardContent } from "@ui";
+import { Button } from "@ui";
 import { ALL_CREATOR_OBJECT_ID, CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
 import { useEnokiAuth } from "@context/EnokiAuthContext";
 import { useActiveAddress } from "@hooks/useActiveAddress";
@@ -115,31 +115,30 @@ export function CreateCreatorPage() {
 
   return (
     <div className="max-w-xl mx-auto duration-300 animate-in fade-in">
-      <Card className="glass-panel border-white/10 shadow-2xl">
-        <CardContent className="p-8">
+      <div className="rounded-3xl border border-[#2a3344] bg-[rgba(7,11,18,0.86)] p-8 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur-lg">
           <div className="mb-8 text-center">
-            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 text-white bg-gradient-to-br from-indigo-500 to-violet-600 rounded-full shadow-lg shadow-indigo-500/30">
+            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 text-white bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-full shadow-lg shadow-emerald-600/30">
               <User className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-bold text-white">Devenir Createur</h1>
-            <p className="mt-2 text-slate-200">Configurez votre profil de createur pour commencer a publier.</p>
+            <h1 className="text-2xl font-bold text-[#f8f5ef]">Devenir Createur</h1>
+            <p className="mt-2 text-[#d8d2c4]">Configurez votre profil de createur pour commencer a publier.</p>
           </div>
 
           {txDigest ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center">
-              <div className="flex items-center justify-center w-16 h-16 mb-2 text-green-400 bg-green-500/20 rounded-full">
+              <div className="flex items-center justify-center w-16 h-16 mb-2 text-emerald-300 bg-emerald-500/20 rounded-full">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
-              <h2 className="text-xl font-semibold text-white">Compte createur cree avec succes</h2>
-              <p className="text-sm text-slate-300">Votre transaction a ete confirmee sur la blockchain Sui.</p>
-              <div className="w-full max-w-md p-3 mt-2 font-mono text-xs break-all border rounded-xl bg-white/5 border-white/10 text-slate-200">
-                <span className="font-semibold text-white">Digest:</span> {txDigest}
+              <h2 className="text-xl font-semibold text-[#f8f5ef]">Compte createur cree avec succes</h2>
+              <p className="text-sm text-[#c8c1b2]">Votre transaction a ete confirmee sur la blockchain Sui.</p>
+              <div className="w-full max-w-md p-3 mt-2 font-mono text-xs break-all border rounded-xl bg-[#0a1220] border-[#2a3547] text-[#e2ddcf]">
+                <span className="font-semibold text-[#f8f5ef]">Digest:</span> {txDigest}
               </div>
               <a
                 href={`https://testnet.suivision.xyz/txblock/${txDigest}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 hover:underline"
+                className="mt-2 text-sm font-medium text-emerald-300 hover:text-emerald-200 hover:underline"
               >
                 Voir la transaction dans Suivision
               </a>
@@ -148,32 +147,32 @@ export function CreateCreatorPage() {
                   href={imageUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm font-medium text-indigo-400 hover:text-indigo-300 hover:underline"
+                  className="text-sm font-medium text-emerald-300 hover:text-emerald-200 hover:underline"
                 >
                   Voir l'image
                 </a>
               )}
             </div>
           ) : !activeAddress ? (
-            <div className="flex flex-col items-center justify-center p-6 space-y-4 text-center border-2 border-dashed rounded-xl bg-white/5 border-white/10">
-              <p className="text-slate-200">Veuillez connecter un wallet Sui ou zkLogin pour continuer</p>
+            <div className="flex flex-col items-center justify-center p-6 space-y-4 text-center border-2 border-dashed rounded-xl bg-[#0a1220] border-[#2a3547]">
+              <p className="text-[#ddd6c8]">Veuillez connecter un wallet Sui ou zkLogin pour continuer</p>
               <ConnectButton />
             </div>
           ) : (
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div>
-                <label className="block mb-2 text-sm font-medium text-slate-200">URL de l'image / Avatar</label>
+                <label className="block mb-2 text-sm font-medium text-[#efe9dc]">URL de l'image / Avatar</label>
                 <div className="flex items-center gap-4">
-                  <div className="relative flex items-center justify-center w-20 h-20 overflow-hidden border-2 border-dashed rounded-full bg-white/5 border-white/20">
+                  <div className="relative flex items-center justify-center w-20 h-20 overflow-hidden border-2 border-dashed rounded-full bg-[#0a1220] border-[#334155]">
                     {imageUrl ? (
                       <img src={imageUrl} alt="Avatar" className="object-cover w-full h-full" />
                     ) : (
-                      <span className="px-2 text-xs text-center text-slate-400">Apercu</span>
+                      <span className="px-2 text-xs text-center text-[#9aa7ba]">Apercu</span>
                     )}
                   </div>
                   <input
                     type="url"
-                    className="flex-1 w-full p-2 border rounded-xl outline-none bg-white/5 border-white/10 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all"
+                    className="flex-1 w-full p-2 border rounded-xl outline-none bg-[#0a1220] border-[#334155] text-[#f8f5ef] placeholder:text-[#7f8ca1] focus:ring-2 focus:ring-emerald-500/60 focus:border-transparent transition-all"
                     placeholder="https://exemple.com/mon-image.jpg"
                     required
                     value={imageUrl}
@@ -183,10 +182,10 @@ export function CreateCreatorPage() {
               </div>
 
               <div>
-                <label className="block mb-1 text-sm font-medium text-slate-200">Nom du Createur</label>
+                <label className="block mb-1 text-sm font-medium text-[#efe9dc]">Nom du Createur</label>
                 <input
                   type="text"
-                  className="w-full p-2 border rounded-xl outline-none bg-white/5 border-white/10 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all"
+                  className="w-full p-2 border rounded-xl outline-none bg-[#0a1220] border-[#334155] text-[#f8f5ef] placeholder:text-[#7f8ca1] focus:ring-2 focus:ring-emerald-500/60 focus:border-transparent transition-all"
                   placeholder="Votre nom de scene"
                   required
                   value={name}
@@ -195,9 +194,9 @@ export function CreateCreatorPage() {
               </div>
 
               <div>
-                <label className="block mb-1 text-sm font-medium text-slate-200">Description</label>
+                <label className="block mb-1 text-sm font-medium text-[#efe9dc]">Description</label>
                 <textarea
-                  className="w-full h-32 p-2 border rounded-xl outline-none resize-none bg-white/5 border-white/10 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all"
+                  className="w-full h-32 p-2 border rounded-xl outline-none resize-none bg-[#0a1220] border-[#334155] text-[#f8f5ef] placeholder:text-[#7f8ca1] focus:ring-2 focus:ring-emerald-500/60 focus:border-transparent transition-all"
                   placeholder="Parlez-nous de votre contenu..."
                   required
                   value={description}
@@ -206,21 +205,21 @@ export function CreateCreatorPage() {
               </div>
 
               <div>
-                <label className="block mb-1 text-sm font-medium text-slate-200">Prix de l'abonnement (SUI/mois)</label>
+                <label className="block mb-1 text-sm font-medium text-[#efe9dc]">Prix de l'abonnement (SUI/mois)</label>
                 <div className="relative">
                   <input
                     type="number"
                     step="0.01"
                     min="0"
-                    className="w-full p-2 pl-10 border rounded-xl outline-none bg-white/5 border-white/10 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all"
+                    className="w-full p-2 pl-10 border rounded-xl outline-none bg-[#0a1220] border-[#334155] text-[#f8f5ef] placeholder:text-[#7f8ca1] focus:ring-2 focus:ring-emerald-500/60 focus:border-transparent transition-all"
                     placeholder="9.99"
                     required
                     value={subscribePrice}
                     onChange={(e) => setSubscribePrice(e.target.value)}
                   />
-                  <span className="absolute left-3 top-2 text-slate-400">SUI</span>
+                  <span className="absolute left-3 top-2 text-[#9aa7ba]">SUI</span>
                 </div>
-                <p className="mt-1 text-xs text-slate-400">Conversion automatique en MIST pour l'ecriture on-chain.</p>
+                <p className="mt-1 text-xs text-[#9aa7ba]">Conversion automatique en MIST pour l'ecriture on-chain.</p>
               </div>
 
               {submitError && <p className="text-sm text-red-400">{submitError}</p>}
@@ -228,7 +227,7 @@ export function CreateCreatorPage() {
               <div className="pt-4">
                 <Button
                   variant="primary"
-                  className="w-full py-6 text-lg shadow-xl shadow-indigo-500/20"
+                  className="w-full py-6 text-lg border-emerald-300/30 shadow-xl shadow-emerald-700/25"
                   type="submit"
                   disabled={isSubmitting}
                 >
@@ -244,8 +243,7 @@ export function CreateCreatorPage() {
               </div>
             </form>
           )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

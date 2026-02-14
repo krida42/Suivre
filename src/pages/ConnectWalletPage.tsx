@@ -41,23 +41,28 @@ export function ConnectWalletPage() {
         <div className="w-full flex justify-center py-2">
           <ConnectButton />
         </div>
-        {isConfigured && (
-          <div className="w-full space-y-3">
-            {isAuthenticated ? (
-              <div className="flex flex-col items-center gap-2">
-                <p className="text-xs text-emerald-300">Connecte avec zkLogin ({shortAddress})</p>
-                <Button variant="secondary" className="w-full" onClick={() => void logout()}>
-                  Se deconnecter de zkLogin
-                </Button>
-              </div>
-            ) : (
-              <Button variant="accent" className="w-full" onClick={() => void handleZkLogin()} isLoading={isAuthLoading}>
-                Se connecter avec Google zkLogin
+        <div className="w-full space-y-3">
+          {isAuthenticated ? (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs text-emerald-300">Connecte avec zkLogin ({shortAddress})</p>
+              <Button variant="secondary" className="w-full" onClick={() => void logout()}>
+                Se deconnecter de zkLogin
               </Button>
-            )}
-            {zkLoginError && <p className="text-xs text-red-400 text-center">{zkLoginError}</p>}
-          </div>
-        )}
+            </div>
+          ) : (
+            <Button
+              variant="accent"
+              className="w-full"
+              onClick={() => void handleZkLogin()}
+              isLoading={isAuthLoading}
+              disabled={!isConfigured}
+            >
+              Se connecter avec Google zkLogin
+            </Button>
+          )}
+          {!isConfigured && <p className="text-xs text-amber-300 text-center">Configuration zkLogin manquante (VITE_ENOKI_PUBLIC_KEY).</p>}
+          {zkLoginError && <p className="text-xs text-red-400 text-center">{zkLoginError}</p>}
+        </div>
         <p className="text-xs text-slate-400">
           Aucun wallet ? Utilisez zkLogin ou installez un wallet compatible Sui (ex: Ethos, Sui Wallet).
         </p>
