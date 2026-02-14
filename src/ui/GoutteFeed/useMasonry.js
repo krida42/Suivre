@@ -85,10 +85,6 @@ export function useMasonry(posts = [], config = {}) {
         // Ensure accurate max columns based on profile
         const maxColumns = Math.max(1, profile.columnCount);
 
-        // Recalculate margins to center comfortably if width is fixed
-        const totalContentWidth = maxColumns * 300; // Approx
-        // We stick to profile logic for now but ensure we use the updated width
-
         const availableWidth = Math.max(1, width - profile.marginX * 2 - profile.columnGap * (maxColumns - 1));
         const columnWidth = Math.floor(availableWidth / maxColumns);
 

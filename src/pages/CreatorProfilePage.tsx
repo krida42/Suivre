@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle, Loader2 } from "lucide-react";
-import { Button, GoutteFeed } from "@ui";
+import { Loader2 } from "lucide-react";
+import { GoutteFeed } from "@ui";
 import { useDecryptContent } from "@hooks/useDecryptContent";
 import { useGetCreatorContent } from "@hooks/useGetCreatorContent";
 import type { Creator } from "@models/domain";
@@ -28,10 +28,10 @@ type PrefetchedMedia = {
 
 export function CreatorProfilePage({
   activeCreator,
-  isSubscribed,
-  isSubscribing,
-  handleSubscribe,
-  subscribeError,
+  isSubscribed: _isSubscribed,
+  isSubscribing: _isSubscribing,
+  handleSubscribe: _handleSubscribe,
+  subscribeError: _subscribeError,
   goToContent: _goToContent,
 }: CreatorProfilePageProps) {
   const {
@@ -192,67 +192,28 @@ export function CreatorProfilePage({
 
   return (
     <div className="duration-500 animate-in slide-in-from-bottom-4">
-      <div className=" px-6 mb-8 border-t-0 shadow-xl glass-panel md:px-10 rounded-b-2xl">
-        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-          <div className="z-20 flex items-end gap-6 mt-12">
-            <div className=" w-32 h-32 overflow-hidden border-4 rounded-full shadow-2xl bg-slate-800 border-slate-900">
-              <img
-                src={activeCreator.avatarUrl || "https://avatar.iran.liara.run/public"}
-                alt="Creator avatar"
-                className="object-cover w-full h-full"
-              />
-            </div>
-            <div className="mb-2">
-              <h1 className="flex items-center gap-2 text-3xl font-bold text-white">
-                {activeCreator.name}
-                {activeCreator.isVerified && <CheckCircle className="w-5 h-5 text-blue-400 fill-current" />}
-              </h1>
-              <p className="font-medium text-slate-300">{activeCreator.subscribers} membres</p>
-            </div>
-          </div>
-          <div className="flex w-full gap-3 mb-2 md:w-auto">
-            <Button
-              variant={isSubscribed ? "outline" : "accent"}
-              className="flex-1 md:flex-none"
-              onClick={handleSubscribe}
-              disabled={isSubscribed || isSubscribing}
-            >
-              {isSubscribed
-                ? "Abonne"
-                : `S'abonner - ${activeCreator.pricePerMonth ? `${activeCreator.pricePerMonth} SUI/mois` : "Prix inconnu"}`}
-            </Button>
-          </div>
-        </div>
-        {subscribeError && <p className="mt-3 text-sm text-red-400">{subscribeError}</p>}
-        <div className="max-w-3xl mt-6">
-          <h3 className="mb-2 font-semibold text-white">A propos</h3>
-          <p className="leading-relaxed text-slate-300">{activeCreator.bio}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-8 px-2 mb-6 border-b border-white/10">
-        <button className="pb-3 text-sm font-medium text-indigo-400 border-b-2 border-indigo-400">Posts</button>
-        <button className="pb-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-400 hover:text-white">
-          Communaute
-        </button>
-        <button className="pb-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-400 hover:text-white">
-          A propos
-        </button>
-      </div>
-
       <div className="min-h-[160px]">
+        <div className="flex items-end justify-between px-1 mb-4">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight text-[#f8f5ef]">Posts</h2>
+            <p className="text-sm text-[#d4cfc1]">
+              {contents.length > 0 ? `${contents.length} contenus publies` : "Collection en chargement"}
+            </p>
+          </div>
+        </div>
+
         {isPreloadingMedia && (
-          <div className="mb-4 text-xs font-medium text-slate-300">Prechargement des medias dechiffres en cours...</div>
+          <div className="mb-4 text-xs font-semibold tracking-wide uppercase text-[#d2c8ae]">Prechargement des medias...</div>
         )}
         {isLoadingContents ? (
           <div className="flex items-center justify-center py-10 text-slate-400">
-            <Loader2 className="w-5 h-5 mr-2 text-indigo-400 animate-spin" />
+            <Loader2 className="w-5 h-5 mr-2 text-amber-300 animate-spin" />
             <span>Chargement des contenus...</span>
           </div>
         ) : contentsError ? (
-          <p className="py-6 text-sm text-center text-red-400">Impossible de charger les contenus de ce createur.</p>
+          <p className="py-6 text-sm text-center text-red-300">Impossible de charger les contenus de ce createur.</p>
         ) : contents.length === 0 ? (
-          <p className="py-6 text-sm text-center text-slate-400">Aucun contenu publie pour le moment.</p>
+          <p className="py-6 text-sm text-center text-slate-300">Aucun contenu publie pour le moment.</p>
         ) : (
           <GoutteFeed posts={contentPosts} maxWidth={1400} />
         )}

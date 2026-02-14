@@ -113,6 +113,11 @@ body {
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
+.wallet-topbar button,
+.wallet-topbar button * {
+  color: #f8f5ef !important;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
