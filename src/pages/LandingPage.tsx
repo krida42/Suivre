@@ -190,13 +190,16 @@ function HeroSection() {
           {/* Left: Nav links */}
           <nav className="hidden md:flex gap-8">
             <button onClick={() => scrollToSection('creators')} className="text-white hover:text-gray-300 font-medium transition-colors">Creators</button>
-            <button onClick={() => scrollToSection('mission')} className="text-white hover:text-gray-300 font-medium transition-colors">Our mission</button>
             <button onClick={() => scrollToSection('how-it-works')} className="text-white hover:text-gray-300 font-medium transition-colors">How it works</button>
           </nav>
           
           {/* Center: Title */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 text-2xl font-bold tracking-widest uppercase">
-            Suivre
+          <div className="absolute left-1/2 transform -translate-x-1/2">
+            <img 
+              src="/images/dark_suivre.png" 
+              alt="Suivre" 
+              className="h-24" 
+            />
           </div>
 
           {/* Right: CTA */}
@@ -236,24 +239,6 @@ export function LandingPage() {
           </div>
           <div className="flex-1 flex justify-center items-center">
             <CreatorShowcase />
-          </div>
-        </div>
-      </section>
-
-      {/* Our Mission Section */}
-      <section id="mission" className="py-24 px-8 md:px-16 bg-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row-reverse items-center gap-16">
-          <div className="flex-1 space-y-6">
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tight">Our Mission</h2>
-            <p className="text-lg text-gray-300 leading-relaxed">
-              We are dedicated to providing a fair, secure, and innovative ecosystem to support creators, ambitious projects, and meaningful causes. We believe that value should flow directly to those who create it.
-            </p>
-          </div>
-          <div className="flex-1 flex justify-center items-center">
-             {/* Placeholder for illustration */}
-             <div className="w-full h-64 md:h-96 bg-slate-700 rounded-2xl border-2 border-dashed border-slate-600 flex items-center justify-center text-slate-400">
-              Mission Illustration Placeholder
-            </div>
           </div>
         </div>
       </section>
@@ -304,10 +289,11 @@ export function LandingPage() {
           </div>
 
           <div className="w-full flex justify-center mt-12">
-             {/* Placeholder for illustration */}
-             <div className="w-full max-w-4xl h-64 bg-slate-800 rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center text-slate-500">
-              How it works - Architecture Illustration Placeholder
-            </div>
+             <img 
+               src="/images/illustration.jpg" 
+               alt="Architecture Illustration" 
+               className="w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-700"
+             />
           </div>
         </div>
       </section>

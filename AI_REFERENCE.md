@@ -1,8 +1,8 @@
-# AI Reference - Suivre (SuiFan)
+# AI Reference - Suivre
 
 ## 1. Objectif du projet
 
-Suivre (nom UI: **SuiFan**) est une dApp React + TypeScript sur Sui qui permet:
+Suivre est une dApp React + TypeScript sur Sui qui permet:
 - de creer un profil createur on-chain,
 - de publier des posts contenant du texte, une image, une video, ou toute combinaison de ces formats,
 - de gerer des abonnements mensuels,

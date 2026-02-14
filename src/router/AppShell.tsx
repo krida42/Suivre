@@ -106,12 +106,11 @@ export function AppShell() {
         <div className="container flex items-center justify-between h-16 px-4 mx-auto">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 cursor-pointer group" onClick={goHome}>
-              <div className="flex items-center justify-center w-8 h-8 transition-transform duration-300 rounded-lg shadow-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-indigo-500/30 group-hover:scale-110">
-                <Play className="w-5 h-5 text-white fill-current" />
-              </div>
-              <span className="text-xl font-bold tracking-tight text-white transition-colors group-hover:text-indigo-300">
-                Suivre
-              </span>
+              <img 
+                src="/images/dark_suivre.png" 
+                alt="Suivre" 
+                className="h-16 mt-2 transition-opacity duration-300 group-hover:opacity-80" 
+              />
             </div>
 
             <nav className="items-center hidden gap-6 text-sm font-medium md:flex text-slate-300">
