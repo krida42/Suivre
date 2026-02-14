@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier \"src/**/*.{ts,tsx,css}\" \"*.{js,ts,json}\" --write",
     "format:check": "prettier \"src/**/*.{ts,tsx,css}\" \"*.{js,ts,json}\" --check",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "env:from-publish": "node scripts/sui-publish-to-env.mjs"
   },
   "dependencies": {
     "@mysten/dapp-kit": "^0.19.9",
