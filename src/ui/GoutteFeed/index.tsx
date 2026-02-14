@@ -22,6 +22,8 @@ const GoutteFeed = ({
   onPostClick,
 }: GoutteFeedProps) => {
   const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [measuredContainerWidth, setMeasuredContainerWidth] = useState<number | null>(null);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -29,7 +31,25 @@ const GoutteFeed = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const activeWidth = userContainerWidth || Math.min(windowWidth, maxWidth);
+  useEffect(() => {
+    if (!containerRef.current || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const node = containerRef.current;
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = entries[0]?.contentRect.width;
+      if (!nextWidth || Number.isNaN(nextWidth)) return;
+      setMeasuredContainerWidth(nextWidth);
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const fallbackWidth = Math.min(windowWidth, maxWidth);
+  const inferredWidth = measuredContainerWidth ? Math.min(measuredContainerWidth, maxWidth) : fallbackWidth;
+  const activeWidth = userContainerWidth || inferredWidth;
   const safePosts = posts.length > 0 ? posts : [];
   const { slots, sceneHeight } = useMasonry(safePosts, { containerWidth: activeWidth });
   const [activeFocus, setActiveFocus] = useState<{ id: number; scrollTop: number; mainTop: number } | null>(null);
@@ -73,7 +93,7 @@ const GoutteFeed = ({
   }
 
   return (
-    <>
+    <div ref={containerRef} className="w-full">
       <div
         className={`fixed inset-0 z-40 bg-[rgba(8,12,18,0.62)] transition-opacity duration-300 ${
           isFocusActive ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -139,7 +159,7 @@ const GoutteFeed = ({
           Click a post to bring it forward. Press Esc to close.
         </div>
       )}
-    </>
+    </div>
   );
 };
 

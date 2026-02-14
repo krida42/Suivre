@@ -69,21 +69,16 @@ export function useMasonry(posts = [], config = {}) {
         const width = containerWidth || window.innerWidth;
         const profile = getProfile(width);
 
-        // Prepare display posts list
-        const displayPosts = [];
-        for (let i = 0; i < profile.count; i += 1) {
-            const base = posts[i % posts.length];
-            displayPosts.push({
-                ...base,
-                uniqueId: `${base.id}-feed-${i}`,
-                description: i < posts.length ? base.description : `${base.description} / iter ${i + 1}`,
-                media: base.media ? { ...base.media } : undefined
-            });
-        }
+        // Use only real posts to avoid synthetic "iter" cards and side clustering.
+        const displayPosts = posts.map((base, i) => ({
+            ...base,
+            uniqueId: `${base.id}-feed-${i}`,
+            media: base.media ? { ...base.media } : undefined
+        }));
 
         const slots = [];
         // Ensure accurate max columns based on profile
-        const maxColumns = Math.max(1, profile.columnCount);
+        const maxColumns = Math.max(1, Math.min(profile.columnCount, displayPosts.length));
 
         const availableWidth = Math.max(1, width - profile.marginX * 2 - profile.columnGap * (maxColumns - 1));
         const columnWidth = Math.floor(availableWidth / maxColumns);
