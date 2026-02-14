@@ -249,7 +249,8 @@ export function AppShell() {
     location.pathname === "/app" ||
     location.pathname === "/app/my-creators" ||
     location.pathname.startsWith("/app/creator/") ||
-    location.pathname.startsWith("/app/content/");
+    location.pathname.startsWith("/app/content/") ||
+    location.pathname.startsWith("/app/publish");
 
   return (
     <div className="relative min-h-screen pb-20 overflow-hidden font-sans text-slate-100">

@@ -65,7 +65,8 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
 
   const { encryptAndUpload, isUploading } = useEncryptAndUploadWalrus();
 
-  const selectedCreatorId = creators[0]?.id ?? "";
+  const selectedCreator = creators[0] ?? null;
+  const selectedCreatorId = selectedCreator?.id ?? "";
 
   useEffect(() => {
     setImageUpload(null);
@@ -173,141 +174,166 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
   };
 
   return (
-    <div className="max-w-4xl mx-auto animate-in fade-in">
-      <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-        <div className="md:col-span-2">
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
-            <LayoutGrid className="w-6 h-6 text-indigo-400" />
-            Publier un post
-          </h1>
-        </div>
-        {/* <div className="w-full">
-          <label className="block mb-1 text-sm font-medium text-slate-200">Selectionnez votre createur</label>
-          <select
-            className="w-full p-2 text-sm border rounded-xl outline-none border-white/10 bg-white/5 text-slate-200 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/30 disabled:text-slate-500"
-            value={selectedCreatorId}
-            onChange={(event) => setManuallySelectedCreatorId(event.target.value)}
-            disabled={isLoadingCreators || creators.length === 0}
+    <div className="max-w-5xl mx-auto animate-in fade-in">
+      <div className="mb-4 rounded-[20px] border border-white/30 bg-[rgba(255,255,255,0.9)] px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.18)] backdrop-blur-sm md:px-5">
+        <h1 className="flex items-center gap-2 text-xl font-black tracking-tight text-[#0f172a]">
+          <LayoutGrid className="w-6 h-6 text-cyan-700" />
+          Publier un post
+        </h1>
+        <p className="mt-1 text-xs text-slate-700">Compose, chiffre et publie.</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+            Createur actif: {selectedCreator?.pseudo || "Aucun profil createur"}
+          </span>
+          <span
+            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+              isUploadInProgress
+                ? "border-cyan-300 bg-cyan-50 text-cyan-700"
+                : "border-emerald-300 bg-emerald-50 text-emerald-700"
+            }`}
           >
-            {isLoadingCreators && <option className="bg-slate-900">Chargement...</option>}
-            {!isLoadingCreators && creators.length === 0 && <option className="bg-slate-900">Aucun createur trouve</option>}
-            {!isLoadingCreators &&
-              creators.map((creator) => (
-                <option key={creator.id} value={creator.id} className="bg-slate-900">
-                  {creator.pseudo}
-                </option>
-              ))}
-          </select>
-          {creatorsError && <p className="mt-1 text-xs text-red-400">Impossible de charger les createurs.</p>}
-          {!isLoadingCreators && creators.length === 0 && (
-            <p className="mt-1 text-xs text-slate-400">
-              Creez d'abord votre profil createur avec ce wallet pour publier du contenu.
-            </p>
-          )}
-        </div> */}
+            {isUploadInProgress ? "Chiffrement en cours" : "Pret a publier"}
+          </span>
+        </div>
+        {creators.length === 0 && (
+          <p className="mt-2 text-xs text-amber-700">Creez d'abord votre profil createur avec ce wallet pour publier du contenu.</p>
+        )}
       </div>
 
       {dashboardStats && (
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <Card className="p-3 border-white/10">
-            <p className="text-xs text-slate-400">Revenue (mock)</p>
-            <p className="text-lg font-semibold text-white">{dashboardStats.revenue}</p>
+        <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2">
+          <Card className="p-3 border-[rgba(15,23,42,0.12)] shadow-lg">
+            <p className="text-xs text-slate-500">Revenue (mock)</p>
+            <p className="text-lg font-semibold text-slate-900">{dashboardStats.revenue}</p>
           </Card>
-          <Card className="p-3 border-white/10">
-            <p className="text-xs text-slate-400">Abonnes (mock)</p>
-            <p className="text-lg font-semibold text-white">{dashboardStats.subscribersCount}</p>
+          <Card className="p-3 border-[rgba(15,23,42,0.12)] shadow-lg">
+            <p className="text-xs text-slate-500">Abonnes (mock)</p>
+            <p className="text-lg font-semibold text-slate-900">{dashboardStats.subscribersCount}</p>
           </Card>
         </div>
       )}
 
       <div className="flex justify-center">
-        <Card className="w-full max-w-3xl pt-6 border-white/10 shadow-xl glass-panel">
-          <CardContent className="p-6 space-y-5">
-            <div>
-              <label className="block mb-1 text-sm font-medium text-slate-200">Titre (optionnel)</label>
-              <input
-                type="text"
-                className="w-full p-2 transition-all border rounded-xl outline-none bg-white/5 text-white placeholder:text-slate-300 focus:ring-2 focus:border-transparent border-white/10 focus:ring-indigo-500/50"
-                placeholder="Ex: Nouvel update..."
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block mb-1 text-sm font-medium text-slate-200">Texte du post (optionnel)</label>
-              <textarea
-                className="w-full h-28 p-2 transition-all border rounded-xl outline-none resize-none bg-white/5 text-white placeholder:text-slate-300 focus:ring-2 focus:border-transparent border-white/10 focus:ring-indigo-500/50"
-                placeholder="Ecrivez le contenu de votre post..."
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-              ></textarea>
-            </div>
-
+        <Card className="w-full max-w-4xl pt-3 border-[rgba(15,23,42,0.14)] shadow-[0_14px_32px_rgba(2,6,23,0.22)]">
+          <CardContent className="p-4 space-y-4 md:p-5">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label className="flex flex-col items-center justify-center gap-3 p-6 transition-all border-2 border-dashed rounded-xl cursor-pointer border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 group">
-                <input type="file" accept="image/*" className="hidden" onChange={handleMediaChange("image")} disabled={!selectedCreatorId || isUploadInProgress} />
-                <div className="text-center">
-                  <div className="inline-block p-3 mb-2 transition-colors rounded-full bg-white/5 group-hover:bg-indigo-500/20">
-                    <ImageIcon className="w-7 h-7 text-slate-300 group-hover:text-indigo-400 transition-colors" />
-                  </div>
-                  <p className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
-                    {uploadingMedia === "image" ? "Chiffrement image..." : "Ajouter une image"}
-                  </p>
-                  <p className="text-xs text-slate-400">PNG, JPG, WEBP...</p>
-                  {imageUpload && (
-                    <p className="mt-2 text-xs text-slate-300">
-                      <span className="font-semibold text-indigo-300">{imageUpload.fileName}</span>
-                    </p>
-                  )}
+              <div className="space-y-3">
+                <div>
+                  <label className="block mb-1 text-sm font-semibold text-slate-800">Titre (optionnel)</label>
+                  <input
+                    type="text"
+                    className="w-full p-2.5 transition-all border rounded-xl outline-none bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:border-cyan-400/60 border-slate-200 focus:ring-cyan-500/30"
+                    placeholder="Ex: Nouvel update..."
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
                 </div>
-              </label>
 
-              <label className="flex flex-col items-center justify-center gap-3 p-6 transition-all border-2 border-dashed rounded-xl cursor-pointer border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 group">
-                <input type="file" accept="video/*" className="hidden" onChange={handleMediaChange("video")} disabled={!selectedCreatorId || isUploadInProgress} />
-                <div className="text-center">
-                  <div className="inline-block p-3 mb-2 transition-colors rounded-full bg-white/5 group-hover:bg-indigo-500/20">
-                    <Video className="w-7 h-7 text-slate-300 group-hover:text-indigo-400 transition-colors" />
-                  </div>
-                  <p className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
-                    {uploadingMedia === "video" ? "Chiffrement video..." : "Ajouter une video"}
-                  </p>
-                  <p className="text-xs text-slate-400">MP4, MOV, WEBM...</p>
-                  {videoUpload && (
-                    <p className="mt-2 text-xs text-slate-300">
-                      <span className="font-semibold text-indigo-300">{videoUpload.fileName}</span>
-                    </p>
-                  )}
+                <div>
+                  <label className="block mb-1 text-sm font-semibold text-slate-800">Texte du post (optionnel)</label>
+                  <textarea
+                    className="w-full h-20 p-2.5 transition-all border rounded-xl outline-none resize-none bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:border-cyan-400/60 border-slate-200 focus:ring-cyan-500/30"
+                    placeholder="Ecrivez le contenu de votre post..."
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                  ></textarea>
                 </div>
-              </label>
+
+                <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-xl bg-cyan-50 text-cyan-800 border border-cyan-200">
+                  <Upload className="w-4 h-4 text-cyan-700" />
+                  <span>Les medias sont chiffres avant publication.</span>
+                </div>
+
+                <Button
+                  variant="accent"
+                  className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-500 hover:to-blue-500 shadow-lg shadow-cyan-500/25"
+                  onClick={handleSubmitClick}
+                  disabled={isUploadInProgress || creators.length === 0}
+                >
+                  Publier le post
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <label
+                  className={`flex min-h-[150px] flex-col items-center justify-center gap-2 p-4 transition-all border-2 border-dashed rounded-xl group ${
+                    !selectedCreatorId || isUploadInProgress
+                      ? "cursor-not-allowed border-slate-200 bg-slate-100/80 opacity-70"
+                      : "cursor-pointer border-slate-300 bg-slate-50 hover:bg-white hover:border-cyan-400/60"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleMediaChange("image")}
+                    disabled={!selectedCreatorId || isUploadInProgress}
+                  />
+                  <div className="text-center">
+                    <div className="inline-block p-2 mb-1 transition-colors rounded-full bg-white border border-slate-200 group-hover:border-cyan-300">
+                      <ImageIcon className="w-5 h-5 text-slate-600 group-hover:text-cyan-700 transition-colors" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {uploadingMedia === "image" ? "Chiffrement image..." : "Ajouter une image"}
+                    </p>
+                    {imageUpload && (
+                      <p className="mt-1 text-xs text-slate-700">
+                        <span className="font-semibold text-cyan-700">{imageUpload.fileName}</span>
+                      </p>
+                    )}
+                  </div>
+                </label>
+
+                <label
+                  className={`flex min-h-[150px] flex-col items-center justify-center gap-2 p-4 transition-all border-2 border-dashed rounded-xl group ${
+                    !selectedCreatorId || isUploadInProgress
+                      ? "cursor-not-allowed border-slate-200 bg-slate-100/80 opacity-70"
+                      : "cursor-pointer border-slate-300 bg-slate-50 hover:bg-white hover:border-cyan-400/60"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleMediaChange("video")}
+                    disabled={!selectedCreatorId || isUploadInProgress}
+                  />
+                  <div className="text-center">
+                    <div className="inline-block p-2 mb-1 transition-colors rounded-full bg-white border border-slate-200 group-hover:border-cyan-300">
+                      <Video className="w-5 h-5 text-slate-600 group-hover:text-cyan-700 transition-colors" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {uploadingMedia === "video" ? "Chiffrement video..." : "Ajouter une video"}
+                    </p>
+                    {videoUpload && (
+                      <p className="mt-1 text-xs text-slate-700">
+                        <span className="font-semibold text-cyan-700">{videoUpload.fileName}</span>
+                      </p>
+                    )}
+                  </div>
+                </label>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-xl bg-white/5 text-slate-300 border border-white/10">
-              <Upload className="w-4 h-4 text-indigo-300" />
-              <span>Les medias (image/video) sont chiffres avant publication via Seal + Walrus.</span>
-            </div>
-
-            <div className="pt-2">
-              <Button variant="accent" className="w-full" onClick={handleSubmitClick} disabled={isUploadInProgress || creators.length === 0}>
-                Publier le post
-              </Button>
-
-              {hasTriedSubmit && !hasPostPayload && <p className="mt-2 text-xs text-red-400">Ajoutez du texte, une image ou une video avant de publier.</p>}
-              {formError && <p className="mt-2 text-xs text-red-400">{formError}</p>}
-              {walrusError && <p className="mt-2 text-xs text-red-400">{walrusError}</p>}
+            <div>
+              {hasTriedSubmit && !hasPostPayload && (
+                <p className="mt-1 text-xs text-red-600">Ajoutez du texte, une image ou une video avant de publier.</p>
+              )}
+              {formError && <p className="mt-1 text-xs text-red-600">{formError}</p>}
+              {walrusError && <p className="mt-1 text-xs text-red-600">{walrusError}</p>}
 
               {(suiDigest || imageUpload || videoUpload) && (
-                <div className="mt-4 space-y-2 text-xs text-slate-300">
+                <div className="mt-3 space-y-1.5 text-xs text-slate-700">
                   {suiDigest && (
                     <>
                       <div className="font-mono break-all">
-                        <span className="font-semibold text-slate-200">Sui digest:</span> {suiDigest}
+                        <span className="font-semibold text-slate-900">Sui digest:</span> {suiDigest}
                       </div>
                       <a
                         href={`https://testnet.suivision.xyz/txblock/${suiDigest}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-indigo-400 hover:text-indigo-300 hover:underline"
+                        className="text-cyan-700 hover:text-cyan-800 hover:underline"
                       >
                         Voir la transaction Sui dans Suivision
                       </a>
@@ -316,13 +342,13 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
 
                   {imageUpload && (
                     <div className="font-mono break-all">
-                      <span className="font-semibold text-slate-200">Image blobId:</span> {imageUpload.blobId}
+                      <span className="font-semibold text-slate-900">Image blobId:</span> {imageUpload.blobId}
                     </div>
                   )}
 
                   {videoUpload && (
                     <div className="font-mono break-all">
-                      <span className="font-semibold text-slate-200">Video blobId:</span> {videoUpload.blobId}
+                      <span className="font-semibold text-slate-900">Video blobId:</span> {videoUpload.blobId}
                     </div>
                   )}
                 </div>

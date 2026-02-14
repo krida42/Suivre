@@ -36,11 +36,11 @@ export function PublishRouteWrapper() {
     <>
       <PublishContentPage dashboardStats={null} handleUpload={handleUpload} />
       {showUploadToast && (
-        <div className="fixed z-50 flex items-center gap-3 px-6 py-3 text-white duration-300 rounded-lg shadow-xl bottom-8 right-8 bg-slate-900 animate-in slide-in-from-bottom-10">
-          <CheckCircle className="w-5 h-5 text-green-400" />
+        <div className="fixed z-50 flex items-center gap-3 px-6 py-3 text-slate-900 duration-300 border rounded-xl shadow-xl bottom-8 right-8 border-[rgba(15,23,42,0.12)] bg-[rgba(255,255,255,0.95)] animate-in slide-in-from-bottom-10">
+          <CheckCircle className="w-5 h-5 text-emerald-600" />
           <div>
             <p className="font-medium">Succes !</p>
-            <p className="text-xs text-slate-300">Votre post a ete publie.</p>
+            <p className="text-xs text-slate-600">Votre post a ete publie.</p>
           </div>
         </div>
       )}
