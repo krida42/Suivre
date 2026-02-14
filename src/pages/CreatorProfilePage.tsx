@@ -29,15 +29,10 @@ export function CreatorProfilePage({
 
   return (
     <div className="duration-500 animate-in slide-in-from-bottom-4">
-      <div className="relative w-full h-48 overflow-hidden bg-indigo-900 md:h-64 rounded-t-2xl">
-        <div className="absolute inset-0 z-10 bg-gradient-to-t from-slate-900/80 to-transparent"></div>
-        <img className="object-cover w-full h-full opacity-80" />
-      </div>
-
-      <div className="relative z-50 px-6 pb-6 mb-8 border-t-0 shadow-xl glass-panel md:px-10 rounded-b-2xl">
+      <div className=" px-6 mb-8 border-t-0 shadow-xl glass-panel md:px-10 rounded-b-2xl">
         <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-          <div className="z-20 flex items-end gap-6 -mt-12">
-            <div className="relative w-32 h-32 overflow-hidden border-4 rounded-full shadow-2xl bg-slate-800 border-slate-900">
+          <div className="z-20 flex items-end gap-6 mt-12">
+            <div className=" w-32 h-32 overflow-hidden border-4 rounded-full shadow-2xl bg-slate-800 border-slate-900">
               <img
                 src={activeCreator.avatarUrl || "https://avatar.iran.liara.run/public"}
                 alt="Creator avatar"
@@ -98,7 +93,21 @@ export function CreatorProfilePage({
               <div key={content.id} className="cursor-pointer group" onClick={() => goToContent(content)}>
                 <div className="relative mb-3 overflow-hidden transition-all border shadow-lg rounded-xl aspect-video bg-slate-800 border-white/5 group-hover:border-indigo-500/30 group-hover:shadow-indigo-500/20">
                   <div className="flex items-center justify-center w-full h-full text-xs font-medium text-slate-400 bg-white/5 backdrop-blur-sm">
-                    {content.videoBlobId ? "Video chiffree" : content.imageBlobId ? "Image chiffree" : "Post texte"}
+                    {content.videoBlobId ? (
+                      <img
+                        src="/images/video_placeholder.png"
+                        alt="Video content"
+                        className="object-cover w-full h-full"
+                      />
+                    ) : content.imageBlobId ? (
+                      <img
+                        src="/images/image_placeholder.jpg"
+                        alt="Image content"
+                        className="object-cover w-full h-full"
+                      />
+                    ) : (
+                      "Post texte"
+                    )}
                   </div>
                   <div className="absolute top-2 right-2">
                     <Badge variant="free">On-chain</Badge>
