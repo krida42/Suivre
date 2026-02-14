@@ -144,15 +144,15 @@ const DropCard = ({
     >
       <div
         className={mergeClasses(
-          "w-full h-full flex flex-col overflow-hidden bg-[rgba(10,16,23,0.96)] border border-[rgba(243,244,246,0.2)]",
-          mode === "panel" && "text-slate-100"
+          "w-full h-full flex flex-col overflow-hidden bg-[rgba(255,255,255,0.96)] border border-[rgba(15,23,42,0.14)]",
+          mode === "panel" && "text-slate-900"
         )}
         style={innerStyle}
       >
-        <div className="absolute inset-0 z-10 pointer-events-none border border-[rgba(243,244,246,0.14)] rounded-[inherit]" />
+        <div className="absolute inset-0 z-10 pointer-events-none border border-[rgba(15,23,42,0.08)] rounded-[inherit]" />
 
         {shouldRenderDefaultContent && media && (
-          <div className={mergeClasses("relative bg-[#080b10]", isFocused ? "flex-1 min-h-0" : "flex-[0_0_62%] min-h-0")}>
+          <div className={mergeClasses("relative bg-[#e2e8f0]", isFocused ? "flex-1 min-h-0" : "flex-[0_0_62%] min-h-0")}>
             {media.type === "video" ? (
               <video
                 src={media.src}
@@ -167,7 +167,7 @@ const DropCard = ({
               <img src={media.src} alt={media.alt ?? "media"} className="block object-cover w-full h-full" />
             )}
 
-            <div className="absolute inset-0 flex items-end p-3 bg-gradient-to-t from-[rgba(8,12,18,0.95)] to-transparent" />
+            <div className="absolute inset-0 flex items-end p-3 bg-gradient-to-t from-[rgba(15,23,42,0.22)] to-transparent" />
           </div>
         )}
 
@@ -175,7 +175,7 @@ const DropCard = ({
           className={mergeClasses(
             "relative z-20 flex-1 flex flex-col gap-2 p-3",
             shouldRenderDefaultContent
-              ? "bg-gradient-to-b from-[rgba(11,15,20,0.7)] to-[rgba(11,15,20,0.98)]"
+              ? "bg-gradient-to-b from-[rgba(255,255,255,0.72)] to-[rgba(255,255,255,0.98)]"
               : "bg-transparent p-0"
           )}
         >
@@ -186,7 +186,7 @@ const DropCard = ({
                 onClose?.();
               }}
               className={mergeClasses(
-                "absolute top-3 right-3 z-30 w-8 h-8 rounded-full border border-[rgba(243,244,246,0.3)] bg-[rgba(8,12,18,0.66)] text-[#f3f4f6] flex items-center justify-center transition-all duration-200 hover:bg-[rgba(8,12,18,0.84)]",
+                "absolute top-3 right-3 z-30 w-8 h-8 rounded-full border border-[rgba(15,23,42,0.2)] bg-[rgba(255,255,255,0.82)] text-[#0f172a] flex items-center justify-center transition-all duration-200 hover:bg-[rgba(255,255,255,0.96)]",
                 isFocused ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
               )}
               aria-label="Close card"
@@ -201,15 +201,15 @@ const DropCard = ({
                 <img
                   src={avatar}
                   alt={handle}
-                  className="w-8 h-8 rounded-full border border-[rgba(243,244,246,0.24)] bg-gray-800 object-cover shrink-0"
+                  className="w-8 h-8 rounded-full border border-[rgba(15,23,42,0.18)] bg-slate-200 object-cover shrink-0"
                 />
                 <div className="grid gap-0.5 min-w-0">
-                  <span className="text-sm font-bold tracking-wide truncate text-[var(--paper)]">{author}</span>
-                  <span className="text-xs text-[var(--muted)] truncate">{handle}</span>
+                  <span className="text-sm font-bold tracking-wide truncate text-[#0f172a]">{author}</span>
+                  <span className="text-xs text-[#64748b] truncate">{handle}</span>
                 </div>
               </div>
 
-              <p className="m-0 font-serif text-[0.98rem] leading-snug text-[rgba(243,244,246,0.95)] line-clamp-4 text-pretty">
+              <p className="m-0 font-serif text-[0.98rem] leading-snug text-[rgba(15,23,42,0.9)] line-clamp-4 text-pretty">
                 {description}
               </p>
             </>

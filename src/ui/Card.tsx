@@ -10,7 +10,7 @@ export function Card({ children, className = "", ...props }: CardProps) {
       interactiveTilt={false}
       disableEntryAnimation
       showCloseButton={false}
-      className={`rounded-2xl glass-panel text-slate-100 ${className}`}
+      className={`rounded-2xl glass-panel text-slate-900 ${className}`}
       {...props}
     >
       {children}
