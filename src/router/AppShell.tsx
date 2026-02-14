@@ -19,7 +19,7 @@ export function AppShell() {
 
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const { connectionStatus } = useCurrentWallet();
-  const { isAuthenticated: isZkLoginConnected, logout: logoutZkLogin } = useEnokiAuth();
+  const { isAuthenticated: isZkLoginConnected, isAuthLoading, logout: logoutZkLogin } = useEnokiAuth();
   const { address: activeAddress, isConnected } = useActiveAddress();
   const currentAccount = useCurrentAccount();
   const isWalletConnected = Boolean(currentAccount?.address);
@@ -84,7 +84,7 @@ export function AppShell() {
     }
   };
 
-  if (connectionStatus === "connecting" && !isZkLoginConnected) {
+  if (isAuthLoading || (connectionStatus === "connecting" && !isZkLoginConnected)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0f172a]">
         <div className="w-12 h-12 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>

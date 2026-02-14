@@ -15,6 +15,7 @@ type EnokiAuthContextValue = {
 };
 
 const EnokiAuthContext = createContext<EnokiAuthContextValue | undefined>(undefined);
+const POST_LOGIN_PATH_STORAGE_KEY = "suivre:postLoginPath";
 
 const enokiPublicKey = typeof import.meta.env.VITE_ENOKI_PUBLIC_KEY === "string" ? import.meta.env.VITE_ENOKI_PUBLIC_KEY.trim() : "";
 const enokiFlow = enokiPublicKey
@@ -27,6 +28,21 @@ const enokiFlow = enokiPublicKey
 function clearAuthHash() {
   if (!window.location.hash) return;
   window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+}
+
+function getSafePostLoginPath(): string {
+  try {
+    const value = window.sessionStorage.getItem(POST_LOGIN_PATH_STORAGE_KEY);
+    window.sessionStorage.removeItem(POST_LOGIN_PATH_STORAGE_KEY);
+
+    if (typeof value === "string" && value.startsWith("/")) {
+      return value;
+    }
+  } catch {
+    // Ignore storage access errors and fallback to default route.
+  }
+
+  return "/app";
 }
 
 export function EnokiAuthProvider({ children }: { children: ReactNode }) {
@@ -61,6 +77,14 @@ export function EnokiAuthProvider({ children }: { children: ReactNode }) {
 
           await flow.handleAuthCallback(window.location.hash);
           clearAuthHash();
+
+          const postLoginPath = getSafePostLoginPath();
+          const currentPath = `${window.location.pathname}${window.location.search}`;
+
+          if (currentPath !== postLoginPath) {
+            window.location.replace(postLoginPath);
+            return;
+          }
         }
 
         setAccountAddress(flow.$zkLoginState.get().address ?? null);
@@ -91,6 +115,13 @@ export function EnokiAuthProvider({ children }: { children: ReactNode }) {
     setIsAuthLoading(true);
 
     try {
+      try {
+        const postLoginPath = `${window.location.pathname}${window.location.search}`;
+        window.sessionStorage.setItem(POST_LOGIN_PATH_STORAGE_KEY, postLoginPath);
+      } catch {
+        // Ignore storage access errors, login can continue without path restoration.
+      }
+
       const redirectUrl =
         import.meta.env.VITE_GOOGLE_REDIRECT_URL ||
         import.meta.env.VITE_ENOKI_REDIRECT_URL ||

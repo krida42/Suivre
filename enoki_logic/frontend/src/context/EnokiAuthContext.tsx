@@ -14,6 +14,8 @@ type EnokiAuthContextValue = {
 };
 
 const EnokiAuthContext = createContext<EnokiAuthContextValue | undefined>(undefined);
+const POST_LOGIN_PATH_STORAGE_KEY = "enoki_logic:post_login_path";
+let authInitializationPromise: Promise<string | null> | null = null;
 
 const enokiFlow = new EnokiFlow({
   apiKey: import.meta.env.VITE_ENOKI_PUBLIC_KEY,
@@ -25,13 +27,38 @@ function clearAuthHash() {
   window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
 }
 
+function persistPostLoginPath(path: string) {
+  try {
+    window.sessionStorage.setItem(POST_LOGIN_PATH_STORAGE_KEY, path);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function consumePostLoginPath(): string {
+  try {
+    const storedPath = window.sessionStorage.getItem(POST_LOGIN_PATH_STORAGE_KEY);
+    window.sessionStorage.removeItem(POST_LOGIN_PATH_STORAGE_KEY);
+    if (storedPath && storedPath.startsWith("/")) {
+      return storedPath;
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+
+  return "/";
+}
+
 export function EnokiAuthProvider({ children }: { children: ReactNode }) {
   const [accountAddress, setAccountAddress] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSigning, setIsSigning] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const unsubscribe = enokiFlow.$zkLoginState.subscribe((state) => {
+      if (!isMounted) return;
       setAccountAddress(state.address ?? null);
     });
 
@@ -39,30 +66,55 @@ export function EnokiAuthProvider({ children }: { children: ReactNode }) {
       setIsAuthLoading(true);
 
       try {
-        await enokiFlow.getSession();
+        authInitializationPromise ??= (async () => {
+          await enokiFlow.getSession();
 
-        if (window.location.hash.includes("id_token=") || window.location.hash.includes("error=")) {
-          const callbackParams = new URLSearchParams(window.location.hash.slice(1));
-          const oauthError = callbackParams.get("error");
-          if (oauthError) {
-            throw new Error(`OAuth callback error: ${oauthError}`);
+          if (window.location.hash.includes("id_token=") || window.location.hash.includes("error=")) {
+            const callbackParams = new URLSearchParams(window.location.hash.slice(1));
+            const oauthError = callbackParams.get("error");
+            if (oauthError) {
+              throw new Error(`OAuth callback error: ${oauthError}`);
+            }
+
+            await enokiFlow.handleAuthCallback(window.location.hash);
+            clearAuthHash();
+
+            const targetPath = consumePostLoginPath();
+            const currentPath = `${window.location.pathname}${window.location.search}`;
+
+            if (targetPath !== currentPath) {
+              window.location.replace(targetPath);
+            }
           }
 
-          await enokiFlow.handleAuthCallback(window.location.hash);
-          clearAuthHash();
-        }
+          return enokiFlow.$zkLoginState.get().address ?? null;
+        })().finally(() => {
+          authInitializationPromise = null;
+        });
 
-        setAccountAddress(enokiFlow.$zkLoginState.get().address ?? null);
+        const address = await authInitializationPromise;
+        if (isMounted) {
+          setAccountAddress(address);
+        }
       } catch (error) {
         console.error("Enoki auth initialization failed:", error);
         clearAuthHash();
+        if (isMounted) {
+          setAccountAddress(null);
+        }
       } finally {
-        setIsAuthLoading(false);
+        if (isMounted) {
+          setIsAuthLoading(false);
+        }
       }
     }
 
     void initializeAuth();
-    return unsubscribe;
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const loginWithGoogle = async () => {
@@ -71,6 +123,7 @@ export function EnokiAuthProvider({ children }: { children: ReactNode }) {
       throw new Error("Missing VITE_GOOGLE_CLIENT_ID in frontend environment.");
     }
 
+    persistPostLoginPath(`${window.location.pathname}${window.location.search}`);
     setIsAuthLoading(true);
 
     try {
