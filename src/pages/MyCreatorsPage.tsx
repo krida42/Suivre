@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
-import { Button, Card, CardContent } from "@ui";
+import { GoutteFeed } from "@ui";
 import { useGetMyCreators } from "@hooks/useGetMyCreators";
 import type { ContentCreator } from "@models/creators";
+import type { GoutteFeedPost } from "@ui/GoutteFeed/types";
 
 interface MyCreatorsPageProps {
   goToCreator: (creator: ContentCreator) => void;
@@ -9,6 +11,25 @@ interface MyCreatorsPageProps {
 
 export function MyCreatorsPage({ goToCreator }: MyCreatorsPageProps) {
   const { data: creators = [], isLoading, error } = useGetMyCreators();
+  const creatorsById = useMemo(() => new Map(creators.map((creator) => [creator.id, creator])), [creators]);
+  const creatorPosts = useMemo<GoutteFeedPost[]>(
+    () =>
+      creators.map((creator, index) => ({
+        id: creator.id,
+        author: creator.pseudo || "Createur",
+        handle: `@${creator.owner.slice(0, 6)}...${creator.owner.slice(-4)}`,
+        avatar: creator.image_url || "https://avatar.iran.liara.run/public",
+        description: creator.description || "Ce createur n'a pas encore ajoute de description.",
+        media: {
+          type: "image",
+          src: creator.image_url || "/images/image_placeholder.jpg",
+          alt: `Profil de ${creator.pseudo || "createur"}`,
+        },
+        accent: index % 2 === 0 ? "#22d3ee" : "#f59e0b",
+        creatorId: creator.id,
+      })),
+    [creators]
+  );
 
   return (
     <div className="space-y-8">
@@ -28,40 +49,17 @@ export function MyCreatorsPage({ goToCreator }: MyCreatorsPageProps) {
       ) : creators.length === 0 ? (
         <div className="py-12 text-center text-slate-400">Vous n'êtes abonné à aucun créateur pour le moment.</div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {creators.map((creator) => (
-            <Card
-              key={creator.id}
-              className="transition-all duration-300 cursor-pointer hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/10 border-white/5 hover:border-indigo-500/30 group"
-            >
-              <CardContent className="pt-6 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0 w-12 h-12 overflow-hidden rounded-full bg-slate-800 ring-2 ring-white/10 group-hover:ring-indigo-500/50 transition-all">
-                    <img
-                      src={creator.image_url || "https://avatar.iran.liara.run/public"}
-                      alt={creator.pseudo}
-                      className="object-cover w-full h-full"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold truncate text-white group-hover:text-indigo-300 transition-colors">
-                      {creator.pseudo}
-                    </h3>
-                    <p className="text-xs truncate text-slate-400">{creator.owner}</p>
-                  </div>
-                </div>
-                <p className="text-sm leading-snug text-slate-300 line-clamp-3">{creator.description}</p>
-                <Button
-                  variant="outline"
-                  className="w-full mt-2 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-500 transition-all"
-                  onClick={() => goToCreator(creator)}
-                >
-                  Voir le profil
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <GoutteFeed
+          posts={creatorPosts}
+          maxWidth={1400}
+          enableFocus={false}
+          showHint={false}
+          onPostClick={(post) => {
+            const creatorId = String(post.creatorId ?? post.id);
+            const creator = creatorsById.get(creatorId);
+            if (creator) goToCreator(creator);
+          }}
+        />
       )}
     </div>
   );

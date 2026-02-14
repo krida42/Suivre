@@ -47,13 +47,12 @@ function resolveBlobId(storageInfo: {
 
 export function PublishContentPage({ dashboardStats, handleUpload }: PublishContentPageProps) {
   const currentAccount = useCurrentAccount();
-  const { data: allCreators = [], isLoading: isLoadingCreators, error: creatorsError } = useGetAllCreators();
+  const { data: allCreators = [] } = useGetAllCreators();
 
   const creators: ContentCreator[] = currentAccount?.address
     ? allCreators.filter((creator) => sameAddress(creator.owner, currentAccount.address))
     : [];
 
-  const [manuallySelectedCreatorId, setManuallySelectedCreatorId] = useState("");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [imageUpload, setImageUpload] = useState<UploadedMedia | null>(null);
@@ -66,10 +65,7 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
 
   const { encryptAndUpload, isUploading } = useEncryptAndUploadWalrus();
 
-  const selectedCreatorId =
-    manuallySelectedCreatorId && creators.some((creator) => creator.id === manuallySelectedCreatorId)
-      ? manuallySelectedCreatorId
-      : creators[0]?.id ?? "";
+  const selectedCreatorId = creators[0]?.id ?? "";
 
   useEffect(() => {
     setImageUpload(null);

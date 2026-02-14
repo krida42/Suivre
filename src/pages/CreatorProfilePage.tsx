@@ -1,8 +1,10 @@
+import { useMemo } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
-import { Button, Badge } from "@ui";
+import { Button, GoutteFeed } from "@ui";
 import { useGetCreatorContent } from "@hooks/useGetCreatorContent";
 import type { Creator } from "@models/domain";
 import type { CreatorContent } from "@models/content";
+import type { GoutteFeedPost } from "@ui/GoutteFeed/types";
 
 interface CreatorProfilePageProps {
   activeCreator: Creator;
@@ -12,6 +14,10 @@ interface CreatorProfilePageProps {
   subscribeError?: string | null;
   goToContent: (content: CreatorContent) => void;
 }
+
+const MOCK_VIDEO_SRC = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+const MOCK_VIDEO_POSTER = "/images/video_placeholder.png";
+const MOCK_IMAGE_THUMB = "/images/image_placeholder.jpg";
 
 export function CreatorProfilePage({
   activeCreator,
@@ -26,6 +32,54 @@ export function CreatorProfilePage({
     isLoading: isLoadingContents,
     error: contentsError,
   } = useGetCreatorContent(activeCreator?.id);
+  const contentById = useMemo(() => new Map(contents.map((content) => [content.id, content])), [contents]);
+  const contentPosts = useMemo<GoutteFeedPost[]>(
+    () =>
+      contents.map((content, index) => {
+        const contentName = content.contentName ?? "";
+        const contentDescription = content.contentDescription ?? "";
+        const hasVideo = Boolean(content.videoBlobId);
+        const hasImage = Boolean(content.imageBlobId);
+        const hasText = contentName.trim().length > 0 || contentDescription.trim().length > 0;
+        const formatLabel = [
+          hasText ? "Texte" : null,
+          hasImage ? "Image" : null,
+          hasVideo ? "Video" : null,
+        ]
+          .filter(Boolean)
+          .join(" • ");
+        const media = hasVideo
+          ? {
+              type: "video" as const,
+              src: MOCK_VIDEO_SRC,
+              poster: MOCK_VIDEO_POSTER,
+              alt: "Mock video thumbnail",
+            }
+          : hasImage
+            ? {
+                type: "image" as const,
+                src: MOCK_IMAGE_THUMB,
+                alt: "Mock image thumbnail",
+              }
+            : undefined;
+
+        return {
+          id: content.id,
+          author: activeCreator.name,
+          handle: "@content",
+          avatar: activeCreator.avatarUrl || "https://avatar.iran.liara.run/public",
+          description:
+            contentDescription ||
+            contentName ||
+            "Contenu on-chain publie par ce createur. Ouvrez la fiche pour decrypter les medias.",
+          media,
+          accent: index % 2 === 0 ? "#22d3ee" : "#f59e0b",
+          contentId: content.id,
+          formatLabel,
+        };
+      }),
+    [activeCreator.avatarUrl, activeCreator.name, contents]
+  );
 
   return (
     <div className="duration-500 animate-in slide-in-from-bottom-4">
@@ -88,46 +142,17 @@ export function CreatorProfilePage({
         ) : contents.length === 0 ? (
           <p className="py-6 text-sm text-center text-slate-400">Aucun contenu publie pour le moment.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {contents.map((content) => (
-              <div key={content.id} className="cursor-pointer group" onClick={() => goToContent(content)}>
-                <div className="relative mb-3 overflow-hidden transition-all border shadow-lg rounded-xl aspect-video bg-slate-800 border-white/5 group-hover:border-indigo-500/30 group-hover:shadow-indigo-500/20">
-                  <div className="flex items-center justify-center w-full h-full text-xs font-medium text-slate-400 bg-white/5 backdrop-blur-sm">
-                    {content.videoBlobId ? (
-                      <img
-                        src="/images/video_placeholder.png"
-                        alt="Video content"
-                        className="object-cover w-full h-full"
-                      />
-                    ) : content.imageBlobId ? (
-                      <img
-                        src="/images/image_placeholder.jpg"
-                        alt="Image content"
-                        className="object-cover w-full h-full"
-                      />
-                    ) : (
-                      "Post texte"
-                    )}
-                  </div>
-                  <div className="absolute top-2 right-2">
-                    <Badge variant="free">On-chain</Badge>
-                  </div>
-                  <div className="absolute inset-0 transition-colors bg-black/20 group-hover:bg-transparent"></div>
-                </div>
-                <h4 className="font-bold text-white transition-colors group-hover:text-indigo-400 line-clamp-2">
-                  {content.contentName || "Contenu sans titre"}
-                </h4>
-                <p className="mt-1 text-xs text-slate-400 line-clamp-3">{content.contentDescription}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  {(content.contentName.trim().length > 0 || content.contentDescription.trim().length > 0) && (
-                    <span className="px-2 py-1 text-[10px] rounded-full bg-white/10 text-slate-300">Texte</span>
-                  )}
-                  {content.imageBlobId && <span className="px-2 py-1 text-[10px] rounded-full bg-white/10 text-slate-300">Image</span>}
-                  {content.videoBlobId && <span className="px-2 py-1 text-[10px] rounded-full bg-white/10 text-slate-300">Video</span>}
-                </div>
-              </div>
-            ))}
-          </div>
+          <GoutteFeed
+            posts={contentPosts}
+            maxWidth={1400}
+            enableFocus={false}
+            showHint={false}
+            onPostClick={(post) => {
+              const contentId = String(post.contentId ?? post.id);
+              const selectedContent = contentById.get(contentId);
+              if (selectedContent) goToContent(selectedContent);
+            }}
+          />
         )}
       </div>
     </div>

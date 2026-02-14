@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { User, Play, Upload } from "lucide-react";
+import { User, Upload } from "lucide-react";
 import { ConnectButton, useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
 import { AppRoutes } from "@router/AppRoutes";
 import { ConnectWalletPage } from "@pages/ConnectWalletPage";
