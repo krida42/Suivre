@@ -37,10 +37,10 @@ module sui_fan::content_creator {
     use sui::{clock::Clock, coin::Coin, sui::SUI};
     // use sui::{clock::Clock, coin::Coin, dynamic_field as df, sui::SUI};
 
-    // const EInvalidCap: u64 = 0;
+    const EInvalidCap: u64 = 0;
     const EInvalidFee: u64 = 1;
     const ENoAccess: u64 = 2;
-    // const MARKER: u64 = 3;
+    const ENotCreatorOwner: u64 = 3;
 
 
     public struct AllCreators has key {
@@ -61,10 +61,13 @@ module sui_fan::content_creator {
         price_per_month: u64,
         description: string::String,
         image_url: string::String,
+        contents: table::Table<u64, ID>,
+        content_count: u64,
     }
 
     public struct Content has key {
         id: UID,
+        creator_id: ID,
         content_name: string::String,
         content_description: string::String,
         blob_id: string::String,
@@ -72,6 +75,7 @@ module sui_fan::content_creator {
 
     public struct CreatorCap has key {
         id: UID,
+        creator_id: ID,
     }
 
     fun init(ctx: &mut TxContext) {
@@ -95,26 +99,48 @@ module sui_fan::content_creator {
             description,
             image_url,
             wallet: ctx.sender(),
+            contents: table::new<u64, ID>(ctx),
+            content_count: 0,
         };
-        transfer::transfer(CreatorCap{id: object::new(ctx)}, ctx.sender());
-        table::add(&mut allCreators.creators, ctx.sender(), object::uid_to_inner(&new_creator.id));
+        let creator_id_for_cap = object::uid_to_inner(&new_creator.id);
+        let creator_id_for_index = object::uid_to_inner(&new_creator.id);
+
+        transfer::transfer(
+            CreatorCap {
+                id: object::new(ctx),
+                creator_id: creator_id_for_cap,
+            },
+            ctx.sender()
+        );
+        table::add(&mut allCreators.creators, ctx.sender(), creator_id_for_index);
         transfer::share_object(new_creator);
 
         // new_creator
 
     }
 
-    public fun upload_content(_cap: &CreatorCap, content_name: string::String, content_description: string::String, blob_id: string::String, ctx: &mut TxContext){
-        // check if ctx.sender() is a registered creator?
+    /// Reusable authorization guard for creator-managed actions.
+    fun assert_creator_access(cap: &CreatorCap, creator: &ContentCreator, sender: address) {
+        assert!(cap.creator_id == object::id(creator), EInvalidCap);
+        assert!(creator.wallet == sender, ENotCreatorOwner);
+    }
+
+    public fun upload_content(cap: &CreatorCap, creator: &mut ContentCreator, content_name: string::String, content_description: string::String, blob_id: string::String, ctx: &mut TxContext){
+        assert_creator_access(cap, creator, ctx.sender());
+
         let new_content = Content {
             id: object::new(ctx),
+            creator_id: object::id(creator),
             content_name,
             content_description,
             blob_id,
         };
+        let content_id = object::uid_to_inner(&new_content.id);
 
-        transfer::transfer(new_content, ctx.sender());
-        // new_content
+        table::add(&mut creator.contents, creator.content_count, content_id);
+        creator.content_count = creator.content_count + 1;
+
+        transfer::share_object(new_content);
         
     }
 

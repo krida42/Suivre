@@ -4,7 +4,7 @@ import type { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
 import { mutateAsync } from "@utils/sui/mutateAsync";
-import { getObjectFields } from "@utils/sui/objectParsing";
+import { extractObjectId, getObjectFields } from "@utils/sui/objectParsing";
 
 type PublishContentArgs = {
   title: string;
@@ -66,21 +66,39 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
         },
         options: {
           showType: true,
+          showContent: true,
         },
       });
 
-      const creatorCapId = ownedCaps.data[0]?.data?.objectId;
+      const creatorCapId = ownedCaps.data
+        .map((capObject) => {
+          const capObjectId = capObject.data?.objectId;
+          const capFields = getObjectFields(capObject.data?.content);
+          const capCreatorId = extractObjectId(capFields?.creator_id);
 
-      // Current Move contract uses one CreatorCap per creator wallet.
+          return {
+            capObjectId: capObjectId ? String(capObjectId) : "",
+            capCreatorId: capCreatorId ? String(capCreatorId).toLowerCase() : "",
+          };
+        })
+        .find((cap) => cap.capObjectId.length > 0 && cap.capCreatorId === creatorId.toLowerCase())?.capObjectId;
+
+      // New Move contract binds CreatorCap to a single creator_id.
       if (!creatorCapId) {
-        throw new Error("No CreatorCap found for the current wallet");
+        throw new Error("No CreatorCap found for the selected creator");
       }
 
       const tx = new Transaction();
 
       tx.moveCall({
         target: `${CONTENT_CREATOR_PACKAGE_ID}::content_creator::upload_content`,
-        arguments: [tx.object(creatorCapId), tx.pure.string(title), tx.pure.string(description), tx.pure.string(blobId)],
+        arguments: [
+          tx.object(creatorCapId),
+          tx.object(creatorId),
+          tx.pure.string(title),
+          tx.pure.string(description),
+          tx.pure.string(blobId),
+        ],
       });
 
       const result = await mutateAsync<{ transaction: Transaction }, ExecuteTransactionResult>(
