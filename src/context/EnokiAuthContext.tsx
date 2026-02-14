@@ -12,6 +12,7 @@ type EnokiAuthContextValue = {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   signSponsoredTransaction: (transactionBytes: string) => Promise<string>;
+  signPersonalMessage: (messageBytes: Uint8Array) => Promise<string>;
 };
 
 const EnokiAuthContext = createContext<EnokiAuthContextValue | undefined>(undefined);
@@ -175,6 +176,27 @@ export function EnokiAuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signPersonalMessage = async (messageBytes: Uint8Array) => {
+    if (!enokiFlow) {
+      throw new Error("zkLogin is not configured.");
+    }
+
+    setIsSigning(true);
+
+    try {
+      const keypair = await enokiFlow.getKeypair({ network: "testnet" });
+      const { signature } = await keypair.signPersonalMessage(messageBytes);
+
+      if (!signature) {
+        throw new Error("Failed to sign personal message.");
+      }
+
+      return signature;
+    } finally {
+      setIsSigning(false);
+    }
+  };
+
   const value = useMemo<EnokiAuthContextValue>(
     () => ({
       accountAddress,
@@ -185,6 +207,7 @@ export function EnokiAuthProvider({ children }: { children: ReactNode }) {
       loginWithGoogle,
       logout,
       signSponsoredTransaction,
+      signPersonalMessage,
     }),
     [accountAddress, isAuthLoading, isSigning]
   );

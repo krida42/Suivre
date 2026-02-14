@@ -6,6 +6,8 @@ import { Transaction } from "@mysten/sui/transactions";
 import { fromHex, SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
 import { buildWalrusAggregatorBlobUrls, SEAL_KEY_THRESHOLD, SEAL_SERVER_OBJECT_IDS, SEAL_VERIFY_KEY_SERVERS } from "@config/storage";
+import { useEnokiAuth } from "@context/EnokiAuthContext";
+import { useActiveAddress } from "@hooks/useActiveAddress";
 import { mutateAsync } from "@utils/sui/mutateAsync";
 import { extractObjectId, getObjectFields } from "@utils/sui/objectParsing";
 import { normalizeWalrusBlobId } from "@utils/walrus";
@@ -175,6 +177,8 @@ async function getLatestSubscriptionForCreator(
 
 export function useDecryptContent(): UseDecryptContentReturn {
   const suiClient = useSuiClient() as SuiClient;
+  const { address: activeAddress, isWalletConnected, isZkLoginConnected } = useActiveAddress();
+  const { signPersonalMessage: signEnokiPersonalMessage } = useEnokiAuth();
   const currentAccount = useCurrentAccount();
   const { mutate: signPersonalMessage } = useSignPersonalMessage();
 
@@ -192,6 +196,37 @@ export function useDecryptContent(): UseDecryptContentReturn {
         verifyKeyServers: SEAL_VERIFY_KEY_SERVERS,
       }),
     [suiClient]
+  );
+
+  const signSessionPersonalMessage = useCallback(
+    async (address: string, message: Uint8Array): Promise<string> => {
+      const walletAddress = currentAccount?.address ?? null;
+      const isWalletAddressMatch = walletAddress?.toLowerCase() === address.toLowerCase();
+
+      if (isWalletConnected && isWalletAddressMatch) {
+        const signatureResult = await mutateAsync<SignPersonalMessageInput, SignPersonalMessageResult>(
+          signPersonalMessage as unknown as (
+            variables: SignPersonalMessageInput,
+            callbacks: {
+              onSuccess: (result: SignPersonalMessageResult) => void;
+              onError: (error: unknown) => void;
+            }
+          ) => void,
+          {
+            message,
+          }
+        );
+
+        return signatureResult.signature;
+      }
+
+      if (isZkLoginConnected) {
+        return signEnokiPersonalMessage(message);
+      }
+
+      throw new Error("Aucune methode de signature disponible pour le dechiffrement.");
+    },
+    [currentAccount?.address, isWalletConnected, isZkLoginConnected, signEnokiPersonalMessage, signPersonalMessage]
   );
 
   const ensureSessionKey = useCallback(
@@ -216,20 +251,8 @@ export function useDecryptContent(): UseDecryptContentReturn {
             suiClient,
           });
 
-          const signatureResult = await mutateAsync<SignPersonalMessageInput, SignPersonalMessageResult>(
-            signPersonalMessage as unknown as (
-              variables: SignPersonalMessageInput,
-              callbacks: {
-                onSuccess: (result: SignPersonalMessageResult) => void;
-                onError: (error: unknown) => void;
-              }
-            ) => void,
-            {
-              message: key.getPersonalMessage(),
-            }
-          );
-
-          await key.setPersonalMessageSignature(signatureResult.signature);
+          const signature = await signSessionPersonalMessage(suiAddress, key.getPersonalMessage());
+          await key.setPersonalMessageSignature(signature);
 
           cachedSessionKey = key;
           cachedSessionKeyAddress = suiAddress;
@@ -243,13 +266,13 @@ export function useDecryptContent(): UseDecryptContentReturn {
 
       return sessionKeyInitPromise;
     },
-    [signPersonalMessage, suiClient]
+    [signSessionPersonalMessage, suiClient]
   );
 
   const decryptContent = useCallback(
     async ({ blobId, creatorId, mimeType }: DecryptArgs): Promise<string> => {
-      if (!currentAccount?.address) {
-        setAndThrow(setError, "Wallet non connectee.");
+      if (!activeAddress) {
+        setAndThrow(setError, "Compte non connecte.");
       }
 
       if (!blobId || !creatorId) {
@@ -283,7 +306,7 @@ export function useDecryptContent(): UseDecryptContentReturn {
         }
 
         const decryptionPromise = (async () => {
-          const suiAddress = currentAccount.address;
+          const suiAddress = activeAddress;
           const sessionKey = await ensureSessionKey(suiAddress);
           const subscriptionCacheKey = makeSubscriptionLookupCacheKey(suiAddress, creatorId);
           const now = Date.now();
@@ -316,7 +339,12 @@ export function useDecryptContent(): UseDecryptContentReturn {
           try {
             encryptedBytes = await fetchEncryptedBlob(normalizedBlobId);
           } catch (fetchError) {
-            const details = fetchError instanceof Error ? ` (${fetchError.message})` : "";
+            const details =
+              fetchError instanceof Error
+                ? fetchError.message === "walrus_fetch_failed_status_404"
+                  ? " (media introuvable sur Walrus: verifiez que le blob n'a pas expire)"
+                  : ` (${fetchError.message})`
+                : "";
             setAndThrow(setError, `Impossible de recuperer le fichier chiffre depuis Walrus. Veuillez reessayer.${details}`);
           }
 
@@ -381,7 +409,7 @@ export function useDecryptContent(): UseDecryptContentReturn {
         setActiveDecryptions((current) => Math.max(0, current - 1));
       }
     },
-    [currentAccount, ensureSessionKey, sealClient, suiClient]
+    [activeAddress, ensureSessionKey, sealClient, suiClient]
   );
 
   return {

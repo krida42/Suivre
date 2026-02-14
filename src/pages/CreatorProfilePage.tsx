@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { GoutteFeed } from "@ui";
 import { useDecryptContent } from "@hooks/useDecryptContent";
@@ -28,20 +28,15 @@ type PrefetchedMedia = {
 
 export function CreatorProfilePage({
   activeCreator,
-  isSubscribed: _isSubscribed,
-  isSubscribing: _isSubscribing,
-  handleSubscribe: _handleSubscribe,
-  subscribeError: _subscribeError,
-  goToContent: _goToContent,
+  goToContent,
 }: CreatorProfilePageProps) {
   const {
     data: contents = [],
     isLoading: isLoadingContents,
     error: contentsError,
   } = useGetCreatorContent(activeCreator?.id);
-  const { decryptContent, isDecrypting: isPreloadingMedia } = useDecryptContent();
+  const { decryptContent, isDecrypting: isPreloadingMedia, error: decryptError } = useDecryptContent();
   const [prefetchedMediaByContentId, setPrefetchedMediaByContentId] = useState<Record<string, PrefetchedMedia>>({});
-  const scheduledPrefetchKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!contents.length) return;
@@ -50,72 +45,66 @@ export function CreatorProfilePage({
     const tasks: Array<() => Promise<void>> = [];
 
     for (const content of contents) {
-      if (content.imageBlobId) {
-        const imageTaskKey = `${activeCreator.id}::image::${content.imageBlobId}`;
-        if (!scheduledPrefetchKeysRef.current.has(imageTaskKey)) {
-          scheduledPrefetchKeysRef.current.add(imageTaskKey);
-          tasks.push(async () => {
-            try {
-              const imageUrl = await decryptContent({
-                blobId: content.imageBlobId ?? "",
-                creatorId: activeCreator.id,
-                mimeType: content.imageMimeType,
-              });
+      const prefetchedEntry = prefetchedMediaByContentId[content.id];
 
-              if (cancelled) return;
+      if (content.imageBlobId && !prefetchedEntry?.imageUrl) {
+        tasks.push(async () => {
+          try {
+            const imageUrl = await decryptContent({
+              blobId: content.imageBlobId ?? "",
+              creatorId: activeCreator.id,
+              mimeType: content.imageMimeType,
+            });
 
-              setPrefetchedMediaByContentId((prev) => {
-                const previousEntry = prev[content.id];
-                if (previousEntry?.imageUrl === imageUrl) {
-                  return prev;
-                }
-                return {
-                  ...prev,
-                  [content.id]: {
-                    ...previousEntry,
-                    imageUrl,
-                  },
-                };
-              });
-            } catch (error) {
-              console.error("Prefetch image failed", error);
-            }
-          });
-        }
+            if (cancelled) return;
+
+            setPrefetchedMediaByContentId((prev) => {
+              const previousEntry = prev[content.id];
+              if (previousEntry?.imageUrl === imageUrl) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [content.id]: {
+                  ...previousEntry,
+                  imageUrl,
+                },
+              };
+            });
+          } catch (error) {
+            console.error("Prefetch image failed", error);
+          }
+        });
       }
 
-      if (content.videoBlobId) {
-        const videoTaskKey = `${activeCreator.id}::video::${content.videoBlobId}`;
-        if (!scheduledPrefetchKeysRef.current.has(videoTaskKey)) {
-          scheduledPrefetchKeysRef.current.add(videoTaskKey);
-          tasks.push(async () => {
-            try {
-              const videoUrl = await decryptContent({
-                blobId: content.videoBlobId ?? "",
-                creatorId: activeCreator.id,
-                mimeType: content.videoMimeType,
-              });
+      if (content.videoBlobId && !prefetchedEntry?.videoUrl) {
+        tasks.push(async () => {
+          try {
+            const videoUrl = await decryptContent({
+              blobId: content.videoBlobId ?? "",
+              creatorId: activeCreator.id,
+              mimeType: content.videoMimeType,
+            });
 
-              if (cancelled) return;
+            if (cancelled) return;
 
-              setPrefetchedMediaByContentId((prev) => {
-                const previousEntry = prev[content.id];
-                if (previousEntry?.videoUrl === videoUrl) {
-                  return prev;
-                }
-                return {
-                  ...prev,
-                  [content.id]: {
-                    ...previousEntry,
-                    videoUrl,
-                  },
-                };
-              });
-            } catch (error) {
-              console.error("Prefetch video failed", error);
-            }
-          });
-        }
+            setPrefetchedMediaByContentId((prev) => {
+              const previousEntry = prev[content.id];
+              if (previousEntry?.videoUrl === videoUrl) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [content.id]: {
+                  ...previousEntry,
+                  videoUrl,
+                },
+              };
+            });
+          } catch (error) {
+            console.error("Prefetch video failed", error);
+          }
+        });
       }
     }
 
@@ -139,7 +128,9 @@ export function CreatorProfilePage({
     return () => {
       cancelled = true;
     };
-  }, [activeCreator.id, contents, decryptContent]);
+  }, [activeCreator.id, contents, decryptContent, prefetchedMediaByContentId]);
+
+  const contentsById = useMemo(() => new Map(contents.map((content) => [content.id, content])), [contents]);
 
   const contentPosts = useMemo<GoutteFeedPost[]>(
     () =>
@@ -205,6 +196,7 @@ export function CreatorProfilePage({
         {isPreloadingMedia && (
           <div className="mb-4 text-xs font-semibold tracking-wide uppercase text-[#d2c8ae]">Prechargement des medias...</div>
         )}
+        {decryptError && <div className="mb-4 text-xs text-amber-200">{decryptError}</div>}
         {isLoadingContents ? (
           <div className="flex items-center justify-center py-10 text-slate-400">
             <Loader2 className="w-5 h-5 mr-2 text-amber-300 animate-spin" />
@@ -215,7 +207,17 @@ export function CreatorProfilePage({
         ) : contents.length === 0 ? (
           <p className="py-6 text-sm text-center text-slate-300">Aucun contenu publie pour le moment.</p>
         ) : (
-          <GoutteFeed posts={contentPosts} maxWidth={1400} />
+          <GoutteFeed
+            posts={contentPosts}
+            maxWidth={1400}
+            onPostClick={(post) => {
+              const contentId = String(post.contentId ?? post.id);
+              const content = contentsById.get(contentId);
+              if (content) {
+                goToContent(content);
+              }
+            }}
+          />
         )}
       </div>
     </div>

@@ -151,6 +151,7 @@ export function AppShell() {
             mimeType,
           });
         } catch (error) {
+          scheduledPrefetchMediaKeysRef.current.delete(mediaTaskKey);
           // Failing silently here keeps prefetch best-effort while UI remains responsive.
           console.debug("Global media prefetch skipped", { creatorId, blobId, error });
         }

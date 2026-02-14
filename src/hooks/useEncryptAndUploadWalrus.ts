@@ -18,6 +18,19 @@ type WalrusUploadResponse = {
   };
 };
 
+const DEFAULT_WALRUS_STORAGE_EPOCHS = 30;
+
+function resolveWalrusStorageEpochs(): number {
+  const rawValue = Number(import.meta.env.VITE_WALRUS_STORAGE_EPOCHS ?? DEFAULT_WALRUS_STORAGE_EPOCHS);
+  if (!Number.isFinite(rawValue) || rawValue <= 0) {
+    return DEFAULT_WALRUS_STORAGE_EPOCHS;
+  }
+
+  return Math.floor(rawValue);
+}
+
+const WALRUS_STORAGE_EPOCHS = resolveWalrusStorageEpochs();
+
 export function useEncryptAndUploadWalrus() {
   const [isUploading, setIsUploading] = useState(false);
   const suiClient = useSuiClient();
@@ -68,7 +81,7 @@ export function useEncryptAndUploadWalrus() {
 }
 
 async function storeBlob(encryptedData: Uint8Array): Promise<WalrusUploadResponse> {
-  const response = await fetch(buildWalrusPublisherPutBlobUrl(1), {
+  const response = await fetch(buildWalrusPublisherPutBlobUrl(WALRUS_STORAGE_EPOCHS), {
     method: "PUT",
     body: encryptedData as unknown as BodyInit,
   });
