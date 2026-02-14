@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { Button, GoutteFeed } from "@ui";
+import { useDecryptContent } from "@hooks/useDecryptContent";
 import { useGetCreatorContent } from "@hooks/useGetCreatorContent";
 import type { Creator } from "@models/domain";
 import type { CreatorContent } from "@models/content";
@@ -18,6 +19,12 @@ interface CreatorProfilePageProps {
 const MOCK_VIDEO_SRC = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
 const MOCK_VIDEO_POSTER = "/images/video_placeholder.png";
 const MOCK_IMAGE_THUMB = "/images/image_placeholder.jpg";
+const PREFETCH_CONCURRENCY = 3;
+
+type PrefetchedMedia = {
+  imageUrl?: string;
+  videoUrl?: string;
+};
 
 export function CreatorProfilePage({
   activeCreator,
@@ -32,6 +39,108 @@ export function CreatorProfilePage({
     isLoading: isLoadingContents,
     error: contentsError,
   } = useGetCreatorContent(activeCreator?.id);
+  const { decryptContent, isDecrypting: isPreloadingMedia } = useDecryptContent();
+  const [prefetchedMediaByContentId, setPrefetchedMediaByContentId] = useState<Record<string, PrefetchedMedia>>({});
+  const scheduledPrefetchKeysRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!contents.length) return;
+
+    let cancelled = false;
+    const tasks: Array<() => Promise<void>> = [];
+
+    for (const content of contents) {
+      if (content.imageBlobId) {
+        const imageTaskKey = `${activeCreator.id}::image::${content.imageBlobId}`;
+        if (!scheduledPrefetchKeysRef.current.has(imageTaskKey)) {
+          scheduledPrefetchKeysRef.current.add(imageTaskKey);
+          tasks.push(async () => {
+            try {
+              const imageUrl = await decryptContent({
+                blobId: content.imageBlobId ?? "",
+                creatorId: activeCreator.id,
+                mimeType: content.imageMimeType,
+              });
+
+              if (cancelled) return;
+
+              setPrefetchedMediaByContentId((prev) => {
+                const previousEntry = prev[content.id];
+                if (previousEntry?.imageUrl === imageUrl) {
+                  return prev;
+                }
+                return {
+                  ...prev,
+                  [content.id]: {
+                    ...previousEntry,
+                    imageUrl,
+                  },
+                };
+              });
+            } catch (error) {
+              console.error("Prefetch image failed", error);
+            }
+          });
+        }
+      }
+
+      if (content.videoBlobId) {
+        const videoTaskKey = `${activeCreator.id}::video::${content.videoBlobId}`;
+        if (!scheduledPrefetchKeysRef.current.has(videoTaskKey)) {
+          scheduledPrefetchKeysRef.current.add(videoTaskKey);
+          tasks.push(async () => {
+            try {
+              const videoUrl = await decryptContent({
+                blobId: content.videoBlobId ?? "",
+                creatorId: activeCreator.id,
+                mimeType: content.videoMimeType,
+              });
+
+              if (cancelled) return;
+
+              setPrefetchedMediaByContentId((prev) => {
+                const previousEntry = prev[content.id];
+                if (previousEntry?.videoUrl === videoUrl) {
+                  return prev;
+                }
+                return {
+                  ...prev,
+                  [content.id]: {
+                    ...previousEntry,
+                    videoUrl,
+                  },
+                };
+              });
+            } catch (error) {
+              console.error("Prefetch video failed", error);
+            }
+          });
+        }
+      }
+    }
+
+    if (!tasks.length) {
+      return;
+    }
+
+    const run = async () => {
+      const workers = Array.from({ length: Math.min(PREFETCH_CONCURRENCY, tasks.length) }, async () => {
+        while (tasks.length > 0) {
+          const task = tasks.shift();
+          if (!task) break;
+          await task();
+        }
+      });
+      await Promise.all(workers);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCreator.id, contents, decryptContent]);
+
   const contentPosts = useMemo<GoutteFeedPost[]>(
     () =>
       contents.map((content, index) => {
@@ -47,17 +156,18 @@ export function CreatorProfilePage({
         ]
           .filter(Boolean)
           .join(" • ");
+        const prefetchedMedia = prefetchedMediaByContentId[content.id];
         const media = hasVideo
           ? {
               type: "video" as const,
-              src: MOCK_VIDEO_SRC,
-              poster: MOCK_VIDEO_POSTER,
+              src: prefetchedMedia?.videoUrl ?? MOCK_VIDEO_SRC,
+              poster: prefetchedMedia?.imageUrl ?? MOCK_VIDEO_POSTER,
               alt: "Mock video thumbnail",
             }
           : hasImage
             ? {
                 type: "image" as const,
-                src: MOCK_IMAGE_THUMB,
+                src: prefetchedMedia?.imageUrl ?? MOCK_IMAGE_THUMB,
                 alt: "Mock image thumbnail",
               }
             : undefined;
@@ -77,7 +187,7 @@ export function CreatorProfilePage({
           formatLabel,
         };
       }),
-    [activeCreator.avatarUrl, activeCreator.name, contents]
+    [activeCreator.avatarUrl, activeCreator.name, contents, prefetchedMediaByContentId]
   );
 
   return (
@@ -131,6 +241,9 @@ export function CreatorProfilePage({
       </div>
 
       <div className="min-h-[160px]">
+        {isPreloadingMedia && (
+          <div className="mb-4 text-xs font-medium text-slate-300">Prechargement des medias dechiffres en cours...</div>
+        )}
         {isLoadingContents ? (
           <div className="flex items-center justify-center py-10 text-slate-400">
             <Loader2 className="w-5 h-5 mr-2 text-indigo-400 animate-spin" />

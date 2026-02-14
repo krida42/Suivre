@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { useDecryptContent } from "@hooks/useDecryptContent";
+import { isCachedDecryptedContentUrl, useDecryptContent } from "@hooks/useDecryptContent";
 import type { CreatorContent } from "@models/content";
 
 interface ContentDetailPageProps {
@@ -14,10 +14,16 @@ export function ContentDetailPage({ content, creatorId, goBack }: ContentDetailP
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
+  const maybeRevokeObjectUrl = (url: string | null) => {
+    if (!url) return;
+    if (isCachedDecryptedContentUrl(url)) return;
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     return () => {
-      if (imageUrl) URL.revokeObjectURL(imageUrl);
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      maybeRevokeObjectUrl(imageUrl);
+      maybeRevokeObjectUrl(videoUrl);
     };
   }, [imageUrl, videoUrl]);
 
@@ -26,11 +32,11 @@ export function ContentDetailPage({ content, creatorId, goBack }: ContentDetailP
 
     const revokePreviousMedia = () => {
       setImageUrl((previous) => {
-        if (previous) URL.revokeObjectURL(previous);
+        maybeRevokeObjectUrl(previous);
         return null;
       });
       setVideoUrl((previous) => {
-        if (previous) URL.revokeObjectURL(previous);
+        maybeRevokeObjectUrl(previous);
         return null;
       });
     };
@@ -46,7 +52,7 @@ export function ContentDetailPage({ content, creatorId, goBack }: ContentDetailP
             mimeType: content.imageMimeType,
           });
           if (cancelled) {
-            URL.revokeObjectURL(nextImageUrl);
+            maybeRevokeObjectUrl(nextImageUrl);
           } else {
             setImageUrl(nextImageUrl);
           }
@@ -64,7 +70,7 @@ export function ContentDetailPage({ content, creatorId, goBack }: ContentDetailP
             mimeType: content.videoMimeType,
           });
           if (cancelled) {
-            URL.revokeObjectURL(nextVideoUrl);
+            maybeRevokeObjectUrl(nextVideoUrl);
           } else {
             setVideoUrl(nextVideoUrl);
           }

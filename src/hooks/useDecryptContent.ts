@@ -15,6 +15,10 @@ let cachedSessionKey: SessionKey | null = null;
 let cachedSessionKeyAddress: string | null = null;
 let cachedSessionKeyPackageId: string | null = null;
 let sessionKeyInitPromise: Promise<SessionKey> | null = null;
+const MAX_DECRYPTED_MEDIA_CACHE_SIZE = 120;
+const decryptedMediaUrlCache = new Map<string, string>();
+const decryptedMediaInFlightCache = new Map<string, Promise<string>>();
+const decryptedMediaUrlSet = new Set<string>();
 
 type DecryptArgs = {
   blobId: string;
@@ -48,6 +52,51 @@ type SignPersonalMessageResult = {
 function setAndThrow(setError: (value: string | null) => void, message: string): never {
   setError(message);
   throw new Error(message);
+}
+
+function makeDecryptionCacheKey(args: { creatorId: string; blobId: string; mimeType: string }): string {
+  return `${args.creatorId.toLowerCase()}::${args.blobId}::${args.mimeType.toLowerCase()}`;
+}
+
+function getCachedDecryptedMediaUrl(cacheKey: string): string | null {
+  const cachedUrl = decryptedMediaUrlCache.get(cacheKey);
+  if (!cachedUrl) return null;
+
+  // Refresh key order for LRU behavior.
+  decryptedMediaUrlCache.delete(cacheKey);
+  decryptedMediaUrlCache.set(cacheKey, cachedUrl);
+  return cachedUrl;
+}
+
+function setCachedDecryptedMediaUrl(cacheKey: string, objectUrl: string): void {
+  const previous = decryptedMediaUrlCache.get(cacheKey);
+  if (previous && previous !== objectUrl) {
+    decryptedMediaUrlSet.delete(previous);
+    URL.revokeObjectURL(previous);
+  }
+
+  if (previous) {
+    decryptedMediaUrlCache.delete(cacheKey);
+  }
+
+  decryptedMediaUrlCache.set(cacheKey, objectUrl);
+  decryptedMediaUrlSet.add(objectUrl);
+
+  while (decryptedMediaUrlCache.size > MAX_DECRYPTED_MEDIA_CACHE_SIZE) {
+    const oldestKey = decryptedMediaUrlCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+
+    const oldestUrl = decryptedMediaUrlCache.get(oldestKey);
+    decryptedMediaUrlCache.delete(oldestKey);
+    if (oldestUrl) {
+      decryptedMediaUrlSet.delete(oldestUrl);
+      URL.revokeObjectURL(oldestUrl);
+    }
+  }
+}
+
+export function isCachedDecryptedContentUrl(url: string): boolean {
+  return decryptedMediaUrlSet.has(url);
 }
 
 async function fetchEncryptedBlob(blobId: string): Promise<Uint8Array> {
@@ -200,78 +249,105 @@ export function useDecryptContent(): UseDecryptContentReturn {
         setAndThrow(setError, "Parametres invalides pour le dechiffrement du contenu.");
       }
 
+      const normalizedBlobId = normalizeWalrusBlobId(blobId);
+      if (!normalizedBlobId) {
+        setAndThrow(setError, "BlobId invalide pour Walrus.");
+      }
+
+      const resolvedMimeType = typeof mimeType === "string" && mimeType.trim().length > 0 ? mimeType.trim() : "application/octet-stream";
+      const decryptionCacheKey = makeDecryptionCacheKey({
+        creatorId,
+        blobId: normalizedBlobId,
+        mimeType: resolvedMimeType,
+      });
+
+      const cachedUrl = getCachedDecryptedMediaUrl(decryptionCacheKey);
+      if (cachedUrl) {
+        return cachedUrl;
+      }
+
       setActiveDecryptions((current) => current + 1);
       setError(null);
 
       try {
-        const suiAddress = currentAccount.address;
-        const normalizedBlobId = normalizeWalrusBlobId(blobId);
-        if (!normalizedBlobId) {
-          setAndThrow(setError, "BlobId invalide pour Walrus.");
+        const inFlight = decryptedMediaInFlightCache.get(decryptionCacheKey);
+        if (inFlight) {
+          return await inFlight;
         }
 
-        const sessionKey = await ensureSessionKey(suiAddress);
-        const subscription = await getLatestSubscriptionForCreator(suiClient, suiAddress, creatorId);
+        const decryptionPromise = (async () => {
+          const suiAddress = currentAccount.address;
+          const sessionKey = await ensureSessionKey(suiAddress);
+          const subscription = await getLatestSubscriptionForCreator(suiClient, suiAddress, creatorId);
 
-        if (!subscription) {
-          setAndThrow(setError, "Aucun abonnement valide trouve pour ce createur.");
-        }
-
-        let encryptedBytes: Uint8Array;
-        try {
-          encryptedBytes = await fetchEncryptedBlob(normalizedBlobId);
-        } catch (fetchError) {
-          const details = fetchError instanceof Error ? ` (${fetchError.message})` : "";
-          setAndThrow(setError, `Impossible de recuperer le fichier chiffre depuis Walrus. Veuillez reessayer.${details}`);
-        }
-
-        const encryptedObject = EncryptedObject.parse(encryptedBytes);
-        const encryptedId = encryptedObject.id;
-
-        // Build only the transaction kind bytes used by Seal policy verification.
-        const tx = new Transaction();
-        tx.moveCall({
-          target: `${CONTENT_CREATOR_PACKAGE_ID}::content_creator::seal_approve`,
-          arguments: [
-            tx.pure.vector("u8", fromHex(encryptedId)),
-            tx.object(subscription.id),
-            tx.object(creatorId),
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-        });
-        const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
-
-        try {
-          await sealClient.fetchKeys({
-            ids: [encryptedId],
-            txBytes,
-            sessionKey,
-            threshold: SEAL_KEY_THRESHOLD,
-          });
-        } catch (err) {
-          if (err instanceof NoAccessError) {
-            setAndThrow(setError, "Aucun acces aux cles de dechiffrement.");
+          if (!subscription) {
+            setAndThrow(setError, "Aucun abonnement valide trouve pour ce createur.");
           }
-          setAndThrow(setError, "Impossible de recuperer les cles de dechiffrement.");
-        }
 
-        try {
-          const decrypted = await sealClient.decrypt({
-            data: encryptedBytes,
-            sessionKey,
-            txBytes,
-          });
-
-          const resolvedMimeType = typeof mimeType === "string" && mimeType.trim().length > 0 ? mimeType.trim() : "application/octet-stream";
-          const normalizedBytes = new Uint8Array(decrypted.byteLength);
-          normalizedBytes.set(decrypted);
-          const blob = new Blob([normalizedBytes], { type: resolvedMimeType });
-          return URL.createObjectURL(blob);
-        } catch (err) {
-          if (err instanceof NoAccessError) {
-            setAndThrow(setError, "Aucun acces aux cles de dechiffrement.");
+          let encryptedBytes: Uint8Array;
+          try {
+            encryptedBytes = await fetchEncryptedBlob(normalizedBlobId);
+          } catch (fetchError) {
+            const details = fetchError instanceof Error ? ` (${fetchError.message})` : "";
+            setAndThrow(setError, `Impossible de recuperer le fichier chiffre depuis Walrus. Veuillez reessayer.${details}`);
           }
-          setAndThrow(setError, "Impossible de dechiffrer ce media.");
+
+          const encryptedObject = EncryptedObject.parse(encryptedBytes);
+          const encryptedId = encryptedObject.id;
+
+          // Build only the transaction kind bytes used by Seal policy verification.
+          const tx = new Transaction();
+          tx.moveCall({
+            target: `${CONTENT_CREATOR_PACKAGE_ID}::content_creator::seal_approve`,
+            arguments: [
+              tx.pure.vector("u8", fromHex(encryptedId)),
+              tx.object(subscription.id),
+              tx.object(creatorId),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
+          const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+
+          try {
+            await sealClient.fetchKeys({
+              ids: [encryptedId],
+              txBytes,
+              sessionKey,
+              threshold: SEAL_KEY_THRESHOLD,
+            });
+          } catch (err) {
+            if (err instanceof NoAccessError) {
+              setAndThrow(setError, "Aucun acces aux cles de dechiffrement.");
+            }
+            setAndThrow(setError, "Impossible de recuperer les cles de dechiffrement.");
+          }
+
+          try {
+            const decrypted = await sealClient.decrypt({
+              data: encryptedBytes,
+              sessionKey,
+              txBytes,
+            });
+
+            const normalizedBytes = new Uint8Array(decrypted.byteLength);
+            normalizedBytes.set(decrypted);
+            const blob = new Blob([normalizedBytes], { type: resolvedMimeType });
+            const objectUrl = URL.createObjectURL(blob);
+            setCachedDecryptedMediaUrl(decryptionCacheKey, objectUrl);
+            return objectUrl;
+          } catch (err) {
+            if (err instanceof NoAccessError) {
+              setAndThrow(setError, "Aucun acces aux cles de dechiffrement.");
+            }
+            setAndThrow(setError, "Impossible de dechiffrer ce media.");
+          }
+        })();
+
+        decryptedMediaInFlightCache.set(decryptionCacheKey, decryptionPromise);
+        try {
+          return await decryptionPromise;
+        } finally {
+          decryptedMediaInFlightCache.delete(decryptionCacheKey);
         }
       } finally {
         setActiveDecryptions((current) => Math.max(0, current - 1));
