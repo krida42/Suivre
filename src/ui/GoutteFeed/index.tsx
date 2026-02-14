@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useMasonry } from "./useMasonry";
 import DropCard from "./DropCard";
@@ -32,17 +32,19 @@ const GoutteFeed = ({
   const activeWidth = userContainerWidth || Math.min(windowWidth, maxWidth);
   const safePosts = posts.length > 0 ? posts : [];
   const { slots, sceneHeight } = useMasonry(safePosts, { containerWidth: activeWidth });
-  const [activeId, setActiveId] = useState<number | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+  const [activeFocus, setActiveFocus] = useState<{ id: number; scrollTop: number; mainTop: number } | null>(null);
+  const lastScrollTopRef = useRef(0);
+  const mainRef = useRef<HTMLElement | null>(null);
+  const activeId = activeFocus?.id ?? null;
 
   const isFocusActive = enableFocus && activeId !== null;
 
   useEffect(() => {
     if (!enableFocus) return;
 
-    if (activeId !== null) {
+    if (activeFocus !== null) {
       document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollTop}px`;
+      document.body.style.top = `-${activeFocus.scrollTop}px`;
       document.body.style.width = "100%";
       return;
     }
@@ -50,15 +52,15 @@ const GoutteFeed = ({
     document.body.style.position = "";
     document.body.style.top = "";
     document.body.style.width = "";
-    window.scrollTo(0, scrollTop);
-  }, [activeId, enableFocus, scrollTop]);
+    window.scrollTo(0, lastScrollTopRef.current);
+  }, [activeFocus, enableFocus]);
 
   useEffect(() => {
     if (!enableFocus) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && activeId !== null) {
-        setActiveId(null);
+        setActiveFocus(null);
       }
     };
 
@@ -76,11 +78,11 @@ const GoutteFeed = ({
         className={`fixed inset-0 z-40 bg-[rgba(8,12,18,0.62)] transition-opacity duration-300 ${
           isFocusActive ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
-        onClick={() => setActiveId(null)}
+        onClick={() => setActiveFocus(null)}
         aria-hidden="true"
       />
 
-      <main className="relative mx-auto" style={{ height: sceneHeight, width: activeWidth }}>
+      <main ref={mainRef} className="relative mx-auto" style={{ height: sceneHeight, width: activeWidth }}>
         {slots.map((slot, index) => {
           const isFocused = enableFocus && activeId === slot.index;
           const isDimmed = enableFocus && activeId !== null && !isFocused;
@@ -89,7 +91,7 @@ const GoutteFeed = ({
             ? {
                 ...slot.style,
                 position: "absolute",
-                top: `${scrollTop + window.innerHeight / 2}px`,
+                top: `${(activeFocus?.scrollTop ?? 0) + window.innerHeight / 2 - (activeFocus?.mainTop ?? 0)}px`,
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 width: "min(600px, 90vw)",
@@ -119,10 +121,14 @@ const GoutteFeed = ({
               onClick={() => {
                 onPostClick?.(slot.post as GoutteFeedPost, index);
                 if (!enableFocus) return;
-                setScrollTop(window.scrollY);
-                setActiveId(slot.index);
+                const currentScrollTop = window.scrollY;
+                const mainTop = mainRef.current
+                  ? mainRef.current.getBoundingClientRect().top + currentScrollTop
+                  : 0;
+                lastScrollTopRef.current = currentScrollTop;
+                setActiveFocus({ id: slot.index, scrollTop: currentScrollTop, mainTop });
               }}
-              onClose={() => setActiveId(null)}
+              onClose={() => setActiveFocus(null)}
             />
           );
         })}

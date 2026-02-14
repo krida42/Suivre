@@ -9,7 +9,7 @@ interface MyCreatorsPageProps {
   goToCreator: (creator: ContentCreator) => void;
 }
 
-export function MyCreatorsPage({ goToCreator }: MyCreatorsPageProps) {
+export function MyCreatorsPage({ goToCreator: _goToCreator }: MyCreatorsPageProps) {
   const { data: creators = [], isLoading, error } = useGetMyCreators();
   const creatorsById = useMemo(() => new Map(creators.map((creator) => [creator.id, creator])), [creators]);
   const creatorPosts = useMemo<GoutteFeedPost[]>(
@@ -57,7 +57,7 @@ export function MyCreatorsPage({ goToCreator }: MyCreatorsPageProps) {
           onPostClick={(post) => {
             const creatorId = String(post.creatorId ?? post.id);
             const creator = creatorsById.get(creatorId);
-            if (creator) goToCreator(creator);
+            if (creator) _goToCreator(creator);
           }}
         />
       )}

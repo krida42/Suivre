@@ -25,14 +25,13 @@ export function CreatorProfilePage({
   isSubscribing,
   handleSubscribe,
   subscribeError,
-  goToContent,
+  goToContent: _goToContent,
 }: CreatorProfilePageProps) {
   const {
     data: contents = [],
     isLoading: isLoadingContents,
     error: contentsError,
   } = useGetCreatorContent(activeCreator?.id);
-  const contentById = useMemo(() => new Map(contents.map((content) => [content.id, content])), [contents]);
   const contentPosts = useMemo<GoutteFeedPost[]>(
     () =>
       contents.map((content, index) => {
@@ -142,17 +141,7 @@ export function CreatorProfilePage({
         ) : contents.length === 0 ? (
           <p className="py-6 text-sm text-center text-slate-400">Aucun contenu publie pour le moment.</p>
         ) : (
-          <GoutteFeed
-            posts={contentPosts}
-            maxWidth={1400}
-            enableFocus={false}
-            showHint={false}
-            onPostClick={(post) => {
-              const contentId = String(post.contentId ?? post.id);
-              const selectedContent = contentById.get(contentId);
-              if (selectedContent) goToContent(selectedContent);
-            }}
-          />
+          <GoutteFeed posts={contentPosts} maxWidth={1400} />
         )}
       </div>
     </div>

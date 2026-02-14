@@ -9,7 +9,7 @@ interface HomePageProps {
   goToCreator: (creator: ContentCreator) => void;
 }
 
-export function HomePage({ goToCreator }: HomePageProps) {
+export function HomePage({ goToCreator: _goToCreator }: HomePageProps) {
   const { data: creators = [], isLoading, error } = useGetAllCreators();
   const creatorsById = useMemo(() => new Map(creators.map((creator) => [creator.id, creator])), [creators]);
   const creatorPosts = useMemo<GoutteFeedPost[]>(
@@ -57,7 +57,7 @@ export function HomePage({ goToCreator }: HomePageProps) {
           onPostClick={(post) => {
             const creatorId = String(post.creatorId ?? post.id);
             const creator = creatorsById.get(creatorId);
-            if (creator) goToCreator(creator);
+            if (creator) _goToCreator(creator);
           }}
         />
       )}
