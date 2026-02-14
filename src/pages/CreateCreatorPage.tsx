@@ -1,15 +1,21 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { User, Loader2, CheckCircle2 } from "lucide-react";
-import { useCurrentAccount, useSignAndExecuteTransaction, ConnectButton } from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction, useSignTransaction, useSuiClient, ConnectButton } from "@mysten/dapp-kit";
+import type { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { Button, Card, CardContent } from "@ui";
 import { ALL_CREATOR_OBJECT_ID, CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
-import { mutateAsync } from "@utils/sui/mutateAsync";
+import { useEnokiAuth } from "@context/EnokiAuthContext";
+import { useActiveAddress } from "@hooks/useActiveAddress";
+import { executeTransactionWithOptionalSponsor } from "@utils/sui/sponsoredTransactions";
 import { parseSuiToMist } from "@utils/sui/amount";
 
 export function CreateCreatorPage() {
-  const currentAccount = useCurrentAccount();
+  const { address: activeAddress, isZkLoginConnected } = useActiveAddress();
+  const { signSponsoredTransaction } = useEnokiAuth();
+  const suiClient = useSuiClient() as SuiClient;
+  const { mutate: signTransaction } = useSignTransaction();
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
   const [name, setName] = useState("");
@@ -32,6 +38,10 @@ export function CreateCreatorPage() {
     nextSubscribePrice: string;
     blobId: string;
   }): Promise<string> => {
+    if (!activeAddress) {
+      throw new Error("Compte non connecte.");
+    }
+
     const amountInMist = parseSuiToMist(nextSubscribePrice);
     if (amountInMist === null) {
       throw new Error("Le prix doit etre un nombre valide (jusqu'a 9 decimales).");
@@ -50,18 +60,22 @@ export function CreateCreatorPage() {
       ],
     });
 
-    const result = await mutateAsync<{ transaction: Transaction }, { digest: string }>(
-      signAndExecuteTransaction as unknown as (
+    const result = await executeTransactionWithOptionalSponsor({
+      operation: "CREATE_CREATOR_PROFILE",
+      transaction: tx,
+      client: suiClient,
+      sender: activeAddress,
+      signSponsoredTransaction: isZkLoginConnected ? signSponsoredTransaction : undefined,
+      signTransactionMutate: signTransaction,
+      signAndExecuteTransactionMutate: signAndExecuteTransaction as unknown as (
         variables: { transaction: Transaction },
         callbacks: {
           onSuccess: (result: { digest: string }) => void;
           onError: (error: unknown) => void;
         }
       ) => void,
-      {
-        transaction: tx,
-      }
-    );
+      allowedMoveCallTargets: [`${CONTENT_CREATOR_PACKAGE_ID}::content_creator::new`],
+    });
 
     if (!result.digest) {
       throw new Error("Digest de transaction manquant.");
@@ -140,9 +154,9 @@ export function CreateCreatorPage() {
                 </a>
               )}
             </div>
-          ) : !currentAccount ? (
+          ) : !activeAddress ? (
             <div className="flex flex-col items-center justify-center p-6 space-y-4 text-center border-2 border-dashed rounded-xl bg-white/5 border-white/10">
-              <p className="text-slate-200">Veuillez connecter votre portefeuille pour continuer</p>
+              <p className="text-slate-200">Veuillez connecter un wallet Sui ou zkLogin pour continuer</p>
               <ConnectButton />
             </div>
           ) : (

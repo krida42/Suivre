@@ -17,6 +17,7 @@
     "paths": {
       "@router/*": ["src/router/*"],
       "@providers/*": ["src/providers/*"],
+      "@context/*": ["src/context/*"],
       "@pages/*": ["src/pages/*"],
       "@hooks/*": ["src/hooks/*"],
       "@services/*": ["src/services/*"],

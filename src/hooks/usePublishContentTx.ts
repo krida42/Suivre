@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction, useSignTransaction, useSuiClient } from "@mysten/dapp-kit";
 import type { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
-import { mutateAsync } from "@utils/sui/mutateAsync";
+import { useEnokiAuth } from "@context/EnokiAuthContext";
+import { useActiveAddress } from "@hooks/useActiveAddress";
+import { executeTransactionWithOptionalSponsor } from "@utils/sui/sponsoredTransactions";
 import { extractObjectId, getObjectFields } from "@utils/sui/objectParsing";
 
 type PublishContentArgs = {
@@ -22,17 +24,15 @@ type UsePublishContentTxReturn = {
   error: string | null;
 };
 
-type ExecuteTransactionResult = {
-  digest: string;
-};
-
 function normalizeInput(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
 export function usePublishContentTx(): UsePublishContentTxReturn {
-  const currentAccount = useCurrentAccount();
+  const { address: activeAddress, isZkLoginConnected } = useActiveAddress();
+  const { signSponsoredTransaction } = useEnokiAuth();
   const suiClient = useSuiClient() as SuiClient;
+  const { mutate: signTransaction } = useSignTransaction();
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
   const [isPublishing, setIsPublishing] = useState(false);
@@ -47,8 +47,8 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
     videoMimeType,
     creatorId,
   }: PublishContentArgs): Promise<{ digest: string }> => {
-    if (!currentAccount?.address) {
-      throw new Error("Wallet not connected");
+    if (!activeAddress) {
+      throw new Error("No connected account");
     }
 
     if (!creatorId) {
@@ -84,13 +84,13 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
       const creatorFields = getObjectFields(creatorObject.data?.content);
       const creatorWallet = String(creatorFields?.wallet ?? "").toLowerCase();
 
-      // Security guard: publishing is allowed only for creator objects owned by the connected wallet.
-      if (!creatorWallet || creatorWallet !== currentAccount.address.toLowerCase()) {
-        throw new Error("Selected creator does not belong to the connected wallet");
+      // Security guard: publishing is allowed only for creator objects owned by the connected account.
+      if (!creatorWallet || creatorWallet !== activeAddress.toLowerCase()) {
+        throw new Error("Selected creator does not belong to the connected account");
       }
 
       const ownedCaps = await suiClient.getOwnedObjects({
-        owner: currentAccount.address,
+        owner: activeAddress,
         filter: {
           StructType: `${CONTENT_CREATOR_PACKAGE_ID}::content_creator::CreatorCap`,
         },
@@ -134,16 +134,22 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
         ],
       });
 
-      const result = await mutateAsync<{ transaction: Transaction }, ExecuteTransactionResult>(
-        signAndExecuteTransaction as unknown as (
+      const result = await executeTransactionWithOptionalSponsor({
+        operation: "PUBLISH_CONTENT",
+        transaction: tx,
+        client: suiClient,
+        sender: activeAddress,
+        signSponsoredTransaction: isZkLoginConnected ? signSponsoredTransaction : undefined,
+        signTransactionMutate: signTransaction,
+        signAndExecuteTransactionMutate: signAndExecuteTransaction as unknown as (
           variables: { transaction: Transaction },
           callbacks: {
-            onSuccess: (result: ExecuteTransactionResult) => void;
+            onSuccess: (result: { digest: string }) => void;
             onError: (error: unknown) => void;
           }
         ) => void,
-        { transaction: tx }
-      );
+        allowedMoveCallTargets: [`${CONTENT_CREATOR_PACKAGE_ID}::content_creator::upload_content`],
+      });
 
       if (!result.digest) {
         throw new Error("Transaction digest missing after upload_content execution");

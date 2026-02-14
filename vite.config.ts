@@ -28,6 +28,7 @@ export default defineConfig({
     alias: {
       "@router": path.resolve(__dirname, "src/router"),
       "@providers": path.resolve(__dirname, "src/providers"),
+      "@context": path.resolve(__dirname, "src/context"),
       "@pages": path.resolve(__dirname, "src/pages"),
       "@hooks": path.resolve(__dirname, "src/hooks"),
       "@services": path.resolve(__dirname, "src/services"),

@@ -2,6 +2,7 @@ import type { PropsWithChildren } from "react";
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { EnokiAuthProvider } from "@context/EnokiAuthContext";
 
 const testnetRpcUrl =
   import.meta.env.VITE_SUI_TESTNET_RPC_URL ?? (import.meta.env.DEV ? "/rpc/sui/testnet" : getFullnodeUrl("testnet"));
@@ -20,7 +21,9 @@ export function AppProviders({ children }: PropsWithChildren) {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
-        <WalletProvider autoConnect>{children}</WalletProvider>
+        <EnokiAuthProvider>
+          <WalletProvider autoConnect>{children}</WalletProvider>
+        </EnokiAuthProvider>
       </SuiClientProvider>
     </QueryClientProvider>
   );

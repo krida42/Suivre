@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { ImageIcon, LayoutGrid, Upload, Video } from "lucide-react";
+import { useActiveAddress } from "@hooks/useActiveAddress";
 import { Button, Card, CardContent } from "@ui";
 import { useEncryptAndUploadWalrus } from "@hooks/useEncryptAndUploadWalrus";
 import { useGetAllCreators } from "@hooks/useGetAllCreators";
@@ -46,14 +46,13 @@ function resolveBlobId(storageInfo: {
 }
 
 export function PublishContentPage({ dashboardStats, handleUpload }: PublishContentPageProps) {
-  const currentAccount = useCurrentAccount();
-  const { data: allCreators = [], isLoading: isLoadingCreators, error: creatorsError } = useGetAllCreators();
+  const { address: activeAddress } = useActiveAddress();
+  const { data: allCreators = [] } = useGetAllCreators();
 
-  const creators: ContentCreator[] = currentAccount?.address
-    ? allCreators.filter((creator) => sameAddress(creator.owner, currentAccount.address))
+  const creators: ContentCreator[] = activeAddress
+    ? allCreators.filter((creator) => sameAddress(creator.owner, activeAddress))
     : [];
 
-  const [manuallySelectedCreatorId, setManuallySelectedCreatorId] = useState("");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [imageUpload, setImageUpload] = useState<UploadedMedia | null>(null);
@@ -66,10 +65,7 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
 
   const { encryptAndUpload, isUploading } = useEncryptAndUploadWalrus();
 
-  const selectedCreatorId =
-    manuallySelectedCreatorId && creators.some((creator) => creator.id === manuallySelectedCreatorId)
-      ? manuallySelectedCreatorId
-      : creators[0]?.id ?? "";
+  const selectedCreatorId = creators[0]?.id ?? "";
 
   useEffect(() => {
     setImageUpload(null);

@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction, useSignTransaction, useSuiClient } from "@mysten/dapp-kit";
 import type { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
-import { mutateAsync } from "@utils/sui/mutateAsync";
+import { useEnokiAuth } from "@context/EnokiAuthContext";
+import { useActiveAddress } from "@hooks/useActiveAddress";
+import { executeTransactionWithOptionalSponsor } from "@utils/sui/sponsoredTransactions";
 import { getObjectFields } from "@utils/sui/objectParsing";
 
 type SubscribeArgs = {
@@ -17,21 +19,19 @@ type UseSubscribeToCreatorReturn = {
   error: string | null;
 };
 
-type ExecuteTransactionResult = {
-  digest: string;
-};
-
 export function useSubscribeToCreator(): UseSubscribeToCreatorReturn {
-  const currentAccount = useCurrentAccount();
+  const { address: activeAddress, isZkLoginConnected } = useActiveAddress();
+  const { signSponsoredTransaction } = useEnokiAuth();
   const suiClient = useSuiClient() as SuiClient;
+  const { mutate: signTransaction } = useSignTransaction();
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const subscribeToCreator = async ({ creatorId }: SubscribeArgs): Promise<void> => {
-    if (!currentAccount?.address) {
-      throw new Error("Wallet not connected");
+    if (!activeAddress) {
+      throw new Error("No connected account");
     }
 
     setIsSubscribing(true);
@@ -63,16 +63,22 @@ export function useSubscribeToCreator(): UseSubscribeToCreatorReturn {
         arguments: [feeCoin, tx.object(creatorId), tx.object(SUI_CLOCK_OBJECT_ID)],
       });
 
-      const result = await mutateAsync<{ transaction: Transaction }, ExecuteTransactionResult>(
-        signAndExecuteTransaction as unknown as (
+      const result = await executeTransactionWithOptionalSponsor({
+        operation: "SUBSCRIBE_CREATOR",
+        transaction: tx,
+        client: suiClient,
+        sender: activeAddress,
+        signSponsoredTransaction: isZkLoginConnected ? signSponsoredTransaction : undefined,
+        signTransactionMutate: signTransaction,
+        signAndExecuteTransactionMutate: signAndExecuteTransaction as unknown as (
           variables: { transaction: Transaction },
           callbacks: {
-            onSuccess: (result: ExecuteTransactionResult) => void;
+            onSuccess: (result: { digest: string }) => void;
             onError: (error: unknown) => void;
           }
         ) => void,
-        { transaction: tx }
-      );
+        allowedMoveCallTargets: [`${CONTENT_CREATOR_PACKAGE_ID}::content_creator::subscribe`],
+      });
 
       if (!result.digest) {
         throw new Error("Subscription transaction digest not found");

@@ -1,26 +1,27 @@
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
+import { useActiveAddress } from "@hooks/useActiveAddress";
 import { mapOnChainCreatorObjectToContentCreator } from "@mappers/mapOnChainCreator";
 import { getObjectFields } from "@utils/sui/objectParsing";
 
 export function useGetMyCreators() {
-  const account = useCurrentAccount();
+  const { address: activeAddress } = useActiveAddress();
   const client = useSuiClient();
 
-  console.log("useGetMyCreators - current account:", account?.address);
+  console.log("useGetMyCreators - current account:", activeAddress);
 
   return useQuery({
-    queryKey: ["my-creators", account?.address],
-    enabled: !!account?.address,
+    queryKey: ["my-creators", activeAddress],
+    enabled: !!activeAddress,
     queryFn: async () => {
-      if (!account?.address) return [];
+      if (!activeAddress) return [];
 
       // 1. Get owned objects
       // Note: In a real production app with many objects, you would need to handle pagination.
       // For this hackathon/demo context, fetching the first page (or assume limit is high enough) is acceptable.
       const ownedObjectsResponse = await client.getOwnedObjects({
-        owner: account.address,
+        owner: activeAddress,
         options: {
           showContent: true,
           showType: true,

@@ -1,7 +1,8 @@
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import { useSuiClient } from "@mysten/dapp-kit";
 import type { SuiClient } from "@mysten/sui/client";
 import { useQuery } from "@tanstack/react-query";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
+import { useActiveAddress } from "@hooks/useActiveAddress";
 import type { UserSubscription } from "@models/subscriptions";
 import { extractObjectId, getObjectFields } from "@utils/sui/objectParsing";
 
@@ -42,13 +43,13 @@ async function fetchUserSubscriptions(suiClient: SuiClient, address: string): Pr
 }
 
 export function useUserSubscriptions(): UseUserSubscriptionsReturn {
-  const currentAccount = useCurrentAccount();
+  const { address: activeAddress } = useActiveAddress();
   const suiClient = useSuiClient() as SuiClient;
 
   const query = useQuery({
-    queryKey: ["user-subscriptions", currentAccount?.address],
-    queryFn: () => fetchUserSubscriptions(suiClient, currentAccount!.address),
-    enabled: Boolean(currentAccount?.address),
+    queryKey: ["user-subscriptions", activeAddress],
+    queryFn: () => fetchUserSubscriptions(suiClient, activeAddress!),
+    enabled: Boolean(activeAddress),
     staleTime: 15_000,
   });
 

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { User, Play, Upload } from "lucide-react";
+import { User, Upload } from "lucide-react";
 import { ConnectButton, useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
+import { useEnokiAuth } from "@context/EnokiAuthContext";
+import { useActiveAddress } from "@hooks/useActiveAddress";
 import { AppRoutes } from "@router/AppRoutes";
 import { ConnectWalletPage } from "@pages/ConnectWalletPage";
 import { useUserSubscriptions } from "@hooks/useUserSubscriptions";
@@ -17,6 +19,8 @@ export function AppShell() {
 
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const { connectionStatus } = useCurrentWallet();
+  const { isAuthenticated: isZkLoginConnected, logout: logoutZkLogin } = useEnokiAuth();
+  const { address: activeAddress, isConnected } = useActiveAddress();
   const currentAccount = useCurrentAccount();
   const isWalletConnected = Boolean(currentAccount?.address);
   const { subscriptions } = useUserSubscriptions();
@@ -26,7 +30,7 @@ export function AppShell() {
 
   useEffect(() => {
     const checkCreatorCap = async () => {
-      if (!isWalletConnected) {
+      if (!isConnected) {
         setHasCreatorProfile(false);
         return;
       }
@@ -42,28 +46,28 @@ export function AppShell() {
     };
 
     void checkCreatorCap();
-  }, [isWalletConnected, getOwnedObjects]);
+  }, [isConnected, getOwnedObjects]);
 
   useEffect(() => {
     setIsSubscribedGlobal(subscriptions.length > 0);
   }, [subscriptions]);
 
   useEffect(() => {
-    if (!currentAccount?.address) {
+    if (!activeAddress) {
       setCurrentUser(null);
       return;
     }
 
     setCurrentUser((previous) => ({
-      id: previous?.id ?? currentAccount.address,
+      id: previous?.id ?? activeAddress,
       name: previous?.name ?? "Utilisateur Sui",
-      email: previous?.email ?? `${currentAccount.address.slice(0, 8)}...@wallet.local`,
+      email: previous?.email ?? `${activeAddress.slice(0, 8)}...@wallet.local`,
       avatarUrl: previous?.avatarUrl ?? "",
       isVerified: previous?.isVerified ?? true,
       unlockedVideoIds: previous?.unlockedVideoIds ?? [],
       subscribedCreatorIds: previous?.subscribedCreatorIds ?? [],
     }));
-  }, [currentAccount?.address]);
+  }, [activeAddress]);
 
   const goHome = () => {
     navigate("/app");
@@ -80,7 +84,7 @@ export function AppShell() {
     }
   };
 
-  if (connectionStatus === "connecting") {
+  if (connectionStatus === "connecting" && !isZkLoginConnected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0f172a]">
         <div className="w-12 h-12 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
@@ -89,7 +93,7 @@ export function AppShell() {
     );
   }
 
-  if (!isWalletConnected) {
+  if (!isConnected) {
     return <ConnectWalletPage />;
   }
 
@@ -151,6 +155,17 @@ export function AppShell() {
             <div className="hidden sm:block">
               <ConnectButton />
             </div>
+            {isZkLoginConnected && !isWalletConnected && (
+              <Button
+                variant="ghost"
+                className="hidden sm:flex text-slate-300 hover:text-white hover:bg-white/10"
+                onClick={() => {
+                  void logoutZkLogin();
+                }}
+              >
+                Deconnexion zkLogin
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
