@@ -1,6 +1,7 @@
 import React from "react";
-import { ConnectButton } from "@mysten/dapp-kit";
 import { Play } from "lucide-react";
+import { EnokiLoginButton } from "../components/EnokiLoginButton";
+import { ConnectButton } from "@mysten/dapp-kit";
 
 export const ConnectWalletView: React.FC = () => {
   return (
@@ -15,13 +16,16 @@ export const ConnectWalletView: React.FC = () => {
           <Play className="w-8 h-8 text-white fill-current" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-white">Connectez votre wallet Sui</h1>
-          <p className="text-slate-300">Pour accéder à la plateforme et publier du contenu, veuillez connecter votre wallet Sui sécurisé.</p>
+          <h1 className="text-3xl font-bold text-white">Connexion</h1>
+          <p className="text-slate-300">Choisissez Google zkLogin ou votre wallet Sui pour accéder à la plateforme.</p>
         </div>
         <div className="w-full flex justify-center py-2">
+          <EnokiLoginButton />
+        </div>
+        <div className="w-full flex justify-center py-1">
           <ConnectButton />
         </div>
-        <p className="text-xs text-slate-400">Aucun wallet ? Installez-en un compatible avec Sui (ex: Ethos, Sui Wallet) puis revenez ici.</p>
+        <p className="text-xs text-slate-400">Le mode zkLogin est gasless sponsorisé, le mode wallet utilise votre extension.</p>
       </div>
     </div>
   );

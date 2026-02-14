@@ -11,12 +11,16 @@ import { CreatorDashboardView } from "./views/CreatorDashboardView";
 import { UserProfileView } from "./views/UserProfileView";
 import { CreateCreatorView } from "./views/CreateCreatorView";
 import { ConnectWalletView } from "./views/ConnectWalletView";
-import { useCurrentAccount, ConnectButton } from "@mysten/dapp-kit";
 import { useUploadContent } from "./lib/useUploadContent";
 import { useSubscribeToCreator } from "./lib/useSubscribeToCreator";
 import { useUserSubscriptions } from "./lib/useUserSubscriptions";
 import type { ContentCreator } from "./lib/useGetCreators";
 import type { CreatorContent } from "./lib/useGetCreatorContent";
+import { useEnokiAuth } from "./context/EnokiAuthContext";
+import { EnokiLoginButton } from "./components/EnokiLoginButton";
+import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
+import { getSuiNsStatusAPI } from "./lib/backendApi";
+import { SuiNsOnboardingModal } from "./components/SuiNsOnboardingModal";
 
 // --- Main Application Component ---
 
@@ -36,8 +40,15 @@ export default function VideoPlatformPrototype() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showUploadToast, setShowUploadToast] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
-  const currentAccount = useCurrentAccount();
-  const isWalletConnected = Boolean(currentAccount?.address);
+  const [showSuiNsOnboarding, setShowSuiNsOnboarding] = useState(false);
+  const [suinsPrimaryName, setSuinsPrimaryName] = useState<string | null>(null);
+  const [suinsCheckedAddress, setSuinsCheckedAddress] = useState<string | null>(null);
+  const { accountAddress } = useEnokiAuth();
+  const walletAccount = useCurrentAccount();
+  const activeAddress = accountAddress || walletAccount?.address || null;
+  const isEnokiConnected = Boolean(accountAddress);
+  const isExtensionWalletConnected = Boolean(walletAccount?.address);
+  const isWalletConnected = isEnokiConnected || isExtensionWalletConnected;
   const { uploadContent } = useUploadContent();
   const { subscribeToCreator, isSubscribing } = useSubscribeToCreator();
   const { subscriptions, refetch: refetchSubscriptions } = useUserSubscriptions();
@@ -93,7 +104,7 @@ export default function VideoPlatformPrototype() {
         subscribers: "0",
         isVerified: false,
         videos: [],
-        pricePerMonth: Number(creator.price_per_month).toFixed(2) || "0",
+        pricePerMonth: formatSuiFromMist(creator.price_per_month) || "0.00",
       };
 
       setActiveCreator(mappedCreator);
@@ -149,6 +160,44 @@ export default function VideoPlatformPrototype() {
     setIsSubscribed(subscribed);
   }, [activeCreator, subscriptions]);
 
+  useEffect(() => {
+    if (!activeAddress) {
+      setShowSuiNsOnboarding(false);
+      setSuinsPrimaryName(null);
+      setSuinsCheckedAddress(null);
+      return;
+    }
+
+    if (suinsCheckedAddress === activeAddress) {
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const status = await getSuiNsStatusAPI(activeAddress);
+        if (cancelled) return;
+        setSuinsPrimaryName(status.primaryName);
+        setShowSuiNsOnboarding(!status.hasSubname);
+      } catch (error) {
+        console.warn("SuiNS status unavailable", error);
+        if (!cancelled) {
+          setShowSuiNsOnboarding(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setSuinsCheckedAddress(activeAddress);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAddress, suinsCheckedAddress]);
+
   const handleUnlock = async () => {
     if (activeVideo && currentUser) {
       setIsUnlocking(true);
@@ -176,6 +225,9 @@ export default function VideoPlatformPrototype() {
     try {
       await subscribeToCreator({ creatorId: activeCreator.id });
       await refetchSubscriptions();
+    } catch (error) {
+      console.error("Subscribe failed", error);
+      alert(`Échec de l'abonnement: ${(error as Error).message}`);
     } finally {
       setIsLoading(false);
     }
@@ -263,9 +315,22 @@ export default function VideoPlatformPrototype() {
             <Button variant="ghost" size="icon" className="rounded-full h-9 w-9 text-slate-300 hover:text-white hover:bg-white/10">
               <Bell className="w-5 h-5" />
             </Button>
-            {/* Wallet connect / disconnect (ConnectButton handles both states) */}
-            <div className="hidden sm:block">
-              <ConnectButton />
+            {suinsPrimaryName && (
+              <div className="hidden lg:block text-xs font-medium text-cyan-200 bg-cyan-500/10 border border-cyan-500/30 rounded-full px-3 py-1">
+                {suinsPrimaryName}
+              </div>
+            )}
+            <div className="hidden sm:flex sm:items-center sm:gap-2">
+              {isEnokiConnected ? (
+                <EnokiLoginButton />
+              ) : isExtensionWalletConnected ? (
+                <ConnectButton />
+              ) : (
+                <>
+                  <EnokiLoginButton />
+                  <ConnectButton />
+                </>
+              )}
             </div>
             <div
               className="flex items-center justify-center transition-all border rounded-full cursor-pointer bg-white/10 border-white/10 h-9 w-9 hover:bg-indigo-600 hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/30"
@@ -345,6 +410,16 @@ export default function VideoPlatformPrototype() {
           <p className="text-sm text-slate-500">© 2024 Plateforme Décentralisée Prototype. Design Concept for demonstration.</p>
         </div>
       </footer> */}
+
+      <SuiNsOnboardingModal
+        open={showSuiNsOnboarding && Boolean(activeAddress)}
+        address={activeAddress}
+        onClose={() => setShowSuiNsOnboarding(false)}
+        onCompleted={(primaryName) => {
+          setSuinsPrimaryName(primaryName);
+          setShowSuiNsOnboarding(false);
+        }}
+      />
     </div>
   );
 }

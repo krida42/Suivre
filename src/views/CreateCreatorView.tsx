@@ -2,13 +2,33 @@ import React, { useState } from "react";
 import { User, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, CardContent } from "../components/Card";
-import { useCurrentAccount, useSignAndExecuteTransaction, ConnectButton } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { allCreatorObjectId, ContentCreatorpackageId } from "../lib/package_id";
+import { useEnokiAuth } from "../context/EnokiAuthContext";
+import { EnokiLoginButton } from "../components/EnokiLoginButton";
+import { ConnectButton, useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { sponsorAndExecuteTransaction } from "../lib/sponsoredTransactions";
+
+const MIST_PER_SUI = 1_000_000_000;
+
+function toMistFromSuiAmount(amountInSui: string): bigint {
+  const normalizedAmount = amountInSui.replace(/,/g, ".");
+  const parsedAmount = Number(normalizedAmount);
+
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    throw new Error("Le prix d'abonnement doit être un nombre positif.");
+  }
+
+  return BigInt(Math.floor(parsedAmount * MIST_PER_SUI));
+}
 
 export const CreateCreatorView: React.FC = () => {
-  const currentAccount = useCurrentAccount();
+  const { accountAddress, signSponsoredTransaction } = useEnokiAuth();
+  const walletAccount = useCurrentAccount();
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const suiClient = useSuiClient();
+  const activeAddress = accountAddress || walletAccount?.address || null;
+  const isZkLoginMode = Boolean(accountAddress);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -30,6 +50,10 @@ export const CreateCreatorView: React.FC = () => {
     subscribePrice: string;
     blobId: string;
   }) => {
+    if (!activeAddress) {
+      throw new Error("Aucun compte connecté (zkLogin ou wallet)");
+    }
+
     const tx = new Transaction();
 
     tx.moveCall({
@@ -37,31 +61,45 @@ export const CreateCreatorView: React.FC = () => {
       arguments: [
         tx.object(allCreatorObjectId),
         tx.pure.string(name),
-        tx.pure.u64(Math.floor(parseFloat(subscribePrice))),
+        tx.pure.u64(toMistFromSuiAmount(subscribePrice)),
         tx.pure.string(description),
         tx.pure.string(blobId),
       ],
     });
 
-    await signAndExecuteTransaction(
-      {
+    if (isZkLoginMode) {
+      const result = await sponsorAndExecuteTransaction({
         transaction: tx,
-      },
-      {
-        onSuccess: (result: { digest: string }) => {
-          console.log("Transaction successful:", result);
-          // Store transaction digest so we can show a confirmation view
-          // and link to Suivision.
-          setTxDigest(result.digest);
-          setSubmitStep("idle");
-        },
-        onError: (error) => {
-          console.error("Transaction failed:", error);
-          alert("Erreur lors de la création sur la blockchain: " + error.message);
-          setSubmitStep("idle");
-        },
+        client: suiClient,
+        sender: activeAddress,
+        signSponsoredTransaction,
+        moveCallTarget: `${ContentCreatorpackageId}::content_creator::new`,
+      });
+
+      const digest = (result?.result as { digest?: string } | undefined)?.digest;
+      if (!digest) {
+        throw new Error("Digest de transaction manquant");
       }
-    );
+      setTxDigest(digest);
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      signAndExecuteTransaction(
+        { transaction: tx },
+        {
+          onSuccess: (result: { digest?: string }) => {
+            if (!result.digest) {
+              reject(new Error("Digest de transaction wallet manquant"));
+              return;
+            }
+            setTxDigest(result.digest);
+            resolve();
+          },
+          onError: (error: Error) => reject(error),
+        },
+      );
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,9 +120,10 @@ export const CreateCreatorView: React.FC = () => {
         subscribePrice,
         blobId: imageUrl,
       });
+      setSubmitStep("idle");
     } catch (err) {
       console.error("Error preparing upload:", err);
-      alert("Erreur lors de la création sur la blockchain.");
+      alert("Erreur lors de la création sur la blockchain: " + (err as Error).message);
       setSubmitStep("idle");
     }
   };
@@ -130,9 +169,10 @@ export const CreateCreatorView: React.FC = () => {
                 </a>
               )}
             </div>
-          ) : !currentAccount ? (
+          ) : !activeAddress ? (
             <div className="flex flex-col items-center justify-center p-6 space-y-4 text-center border-2 border-dashed rounded-xl bg-white/5 border-white/10">
-              <p className="text-slate-200">Veuillez connecter votre portefeuille pour continuer</p>
+              <p className="text-slate-200">Veuillez vous connecter avec Google zkLogin ou un wallet Sui pour continuer</p>
+              <EnokiLoginButton />
               <ConnectButton />
             </div>
           ) : (
@@ -186,7 +226,7 @@ export const CreateCreatorView: React.FC = () => {
 
               {/* Subscription Price Field */}
               <div>
-                <label className="block mb-1 text-sm font-medium text-slate-200">Prix de l'abonnement (€/mois)</label>
+                <label className="block mb-1 text-sm font-medium text-slate-200">Prix de l'abonnement (SUI/mois)</label>
                 <div className="relative">
                   <input
                     type="number"
@@ -198,9 +238,9 @@ export const CreateCreatorView: React.FC = () => {
                     value={subscribePrice}
                     onChange={(e) => setSubscribePrice(e.target.value)}
                   />
-                  <span className="absolute left-3 top-2 text-slate-400">€</span>
+                  <span className="absolute left-3 top-2 text-slate-400">S</span>
                 </div>
-                <p className="mt-1 text-xs text-slate-300">Vous recevrez 99% des revenus générés.</p>
+                <p className="mt-1 text-xs text-slate-300">Le prix est stocké on-chain en MIST.</p>
               </div>
 
               <div className="pt-4">

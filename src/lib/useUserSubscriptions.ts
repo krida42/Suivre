@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { ContentCreatorpackageId } from "./package_id";
+import { useEnokiAuth } from "../context/EnokiAuthContext";
 
 export type UserSubscription = {
   id: string;
@@ -16,7 +17,8 @@ type UseUserSubscriptionsReturn = {
 };
 
 export const useUserSubscriptions = (): UseUserSubscriptionsReturn => {
-  const currentAccount = useCurrentAccount();
+  const { accountAddress } = useEnokiAuth();
+  const walletAccount = useCurrentAccount();
   const suiClient = useSuiClient();
 
   const [subscriptions, setSubscriptions] = useState<UserSubscription[]>([]);
@@ -24,7 +26,8 @@ export const useUserSubscriptions = (): UseUserSubscriptionsReturn => {
   const [error, setError] = useState<string | null>(null);
 
   const loadSubscriptions = async () => {
-    if (!currentAccount?.address) {
+    const activeAddress = accountAddress || walletAccount?.address;
+    if (!activeAddress) {
       setSubscriptions([]);
       return;
     }
@@ -34,7 +37,7 @@ export const useUserSubscriptions = (): UseUserSubscriptionsReturn => {
 
     try {
       const res = await suiClient.getOwnedObjects({
-        owner: currentAccount.address,
+        owner: activeAddress,
         filter: {
           StructType: `${ContentCreatorpackageId}::content_creator::Subscription`,
         },
@@ -46,7 +49,7 @@ export const useUserSubscriptions = (): UseUserSubscriptionsReturn => {
 
       const mapped: UserSubscription[] = res.data
         .map((obj) => {
-          const fields = (obj!.data!.content as { fields: any }).fields;
+          const fields = (obj!.data!.content as { fields: Record<string, any> }).fields;
           if (!fields) return null;
 
           return {
@@ -70,7 +73,7 @@ export const useUserSubscriptions = (): UseUserSubscriptionsReturn => {
   useEffect(() => {
     void loadSubscriptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentAccount?.address]);
+  }, [accountAddress, walletAccount?.address]);
 
   return {
     subscriptions,
@@ -79,5 +82,3 @@ export const useUserSubscriptions = (): UseUserSubscriptionsReturn => {
     refetch: loadSubscriptions,
   };
 };
-
-

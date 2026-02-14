@@ -3,6 +3,8 @@ import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { ContentCreatorpackageId } from "./package_id";
+import { useEnokiAuth } from "../context/EnokiAuthContext";
+import { sponsorAndExecuteTransaction } from "./sponsoredTransactions";
 
 type SubscribeArgs = {
   creatorId: string;
@@ -15,31 +17,28 @@ type UseSubscribeToCreatorReturn = {
 };
 
 /**
- * Hook to subscribe to a creator on-chain using the `subscribe` Move function.
- *
- * It:
- * - Fetches the on-chain `ContentCreator` object to read `price_per_month`
- * - Splits the gas coin to create a `Coin<SUI>` of exactly `price_per_month`
- * - Calls `${ContentCreatorpackageId}::content_creator::subscribe`
+ * Hook to subscribe to a creator on-chain using sponsored zkLogin transaction flow.
  */
 export const useSubscribeToCreator = (): UseSubscribeToCreatorReturn => {
-  const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
+  const { accountAddress, signSponsoredTransaction } = useEnokiAuth();
+  const walletAccount = useCurrentAccount();
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const suiClient = useSuiClient();
 
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const subscribeToCreator = async ({ creatorId }: SubscribeArgs): Promise<void> => {
-    if (!currentAccount?.address) {
-      throw new Error("Wallet not connected");
+    const activeAddress = accountAddress || walletAccount?.address;
+    if (!activeAddress) {
+      throw new Error("Aucun compte connecté (zkLogin ou wallet)");
     }
 
     setIsSubscribing(true);
     setError(null);
 
     try {
-      // 1. Fetch the ContentCreator object to read the on-chain price_per_month
+      // 1. Fetch the ContentCreator object to read the on-chain price_per_month.
       const creatorObject = await suiClient.getObject({
         id: creatorId,
         options: {
@@ -48,7 +47,7 @@ export const useSubscribeToCreator = (): UseSubscribeToCreatorReturn => {
       });
 
       const moveObject = creatorObject.data?.content;
-      const fields = (moveObject as any)?.fields;
+      const fields = (moveObject as { fields?: { price_per_month?: string } } | null)?.fields;
       const priceField = fields?.price_per_month;
 
       if (!priceField) {
@@ -56,30 +55,54 @@ export const useSubscribeToCreator = (): UseSubscribeToCreatorReturn => {
       }
 
       const pricePerMonth = BigInt(priceField);
-
-      // 2. Build transaction: split gas coin to exact fee and call subscribe
       const tx = new Transaction();
+      const isZkLoginMode = Boolean(accountAddress);
 
-      const [feeCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(pricePerMonth)]);
+      if (isZkLoginMode) {
+        // In sponsored mode, gas coin belongs to sponsor.
+        // We must split the subscription payment from a SUI coin owned by the user.
+        const userSuiCoins = await suiClient.getCoins({
+          owner: activeAddress,
+          coinType: "0x2::sui::SUI",
+        });
 
-      tx.moveCall({
-        target: `${ContentCreatorpackageId}::content_creator::subscribe`,
-        arguments: [
-          feeCoin, // Coin<SUI>
-          tx.object(creatorId), // &ContentCreator
-          tx.object(SUI_CLOCK_OBJECT_ID), // &Clock
-        ],
-      });
+        const paymentSourceCoin = userSuiCoins.data.find((coin) => BigInt(coin.balance) >= pricePerMonth);
+        if (!paymentSourceCoin) {
+          throw new Error("Solde SUI insuffisant pour payer cet abonnement.");
+        }
+        const [feeCoin] = tx.splitCoins(tx.object(paymentSourceCoin.coinObjectId), [tx.pure.u64(pricePerMonth)]);
+        tx.moveCall({
+          target: `${ContentCreatorpackageId}::content_creator::subscribe`,
+          arguments: [feeCoin, tx.object(creatorId), tx.object(SUI_CLOCK_OBJECT_ID)],
+        });
+      } else {
+        // Wallet mode: split from user's gas coin directly.
+        const [feeCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(pricePerMonth)]);
+        tx.moveCall({
+          target: `${ContentCreatorpackageId}::content_creator::subscribe`,
+          arguments: [feeCoin, tx.object(creatorId), tx.object(SUI_CLOCK_OBJECT_ID)],
+        });
+      }
 
-      await new Promise<void>((resolve, reject) => {
-        signAndExecuteTransaction(
-          { transaction: tx },
-          {
-            onSuccess: () => resolve(),
-            onError: (err: Error) => reject(err),
-          }
-        );
-      });
+      if (isZkLoginMode) {
+        await sponsorAndExecuteTransaction({
+          transaction: tx,
+          client: suiClient,
+          sender: activeAddress,
+          signSponsoredTransaction,
+          moveCallTarget: `${ContentCreatorpackageId}::content_creator::subscribe`,
+        });
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          signAndExecuteTransaction(
+            { transaction: tx },
+            {
+              onSuccess: () => resolve(),
+              onError: (err: Error) => reject(err),
+            },
+          );
+        });
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error while subscribing to creator";
       setError(message);

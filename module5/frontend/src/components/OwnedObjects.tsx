@@ -1,0 +1,238 @@
+import { useSuiClient, useSuiClientQuery } from "@mysten/dapp-kit";
+import { Flex, Heading, Text, Card, Grid, Button, TextField, Badge, Tabs } from "@radix-ui/themes";
+import { useState } from "react";
+import { useNetworkVariable } from "../networkConfig";
+import { Hero } from "../types/hero";
+import { RefreshProps } from "../types/props";
+import { useEnokiAuth } from "../context/EnokiAuthContext";
+import { sponsorAndExecuteTransaction } from "../utils/sponsoredTransactions";
+import { buildListHeroTransaction, buildTransferHeroTransaction } from "../utils/transactions";
+
+export function OwnedObjects({ refreshKey, setRefreshKey }: RefreshProps) {
+  const { accountAddress, signSponsoredTransaction, isSigning } = useEnokiAuth();
+  const packageId = useNetworkVariable("packageId");
+  const suiClient = useSuiClient();
+  const [transferAddress, setTransferAddress] = useState<{ [key: string]: string }>({});
+  const [listPrice, setListPrice] = useState<{ [key: string]: string }>({});
+  const [isTransferring, setIsTransferring] = useState<{ [key: string]: boolean }>({});
+  const [isListing, setIsListing] = useState<{ [key: string]: boolean }>({});
+  const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({});
+
+  const { data, isPending, error } = useSuiClientQuery(
+    "getOwnedObjects",
+    {
+      owner: accountAddress as string,
+      filter: {
+        StructType: `${packageId}::hero::Hero`
+      },
+      options: {
+        showContent: true,
+        showType: true
+      }
+    },
+    {
+      enabled: !!accountAddress && !!packageId,
+      queryKey: ["getOwnedObjects", accountAddress, packageId, refreshKey],
+    }
+  );
+
+  const copyToClipboard = (text: string, heroId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedStates(prev => ({ ...prev, [heroId]: true }));
+    
+    setTimeout(() => {
+      setCopiedStates(prev => ({ ...prev, [heroId]: false }));
+    }, 2000);
+  };
+
+  const handleTransfer = async (heroId: string, address: string) => {
+    if (!address.trim() || !accountAddress) return;
+    
+    setIsTransferring(prev => ({ ...prev, [heroId]: true }));
+    
+    try {
+      const tx = buildTransferHeroTransaction(heroId, address);
+
+      await sponsorAndExecuteTransaction({
+        transaction: tx,
+        client: suiClient,
+        sender: accountAddress,
+        signSponsoredTransaction,
+        allowedAddresses: [address],
+      });
+      
+      console.log("Hero transferred successfully!");
+      setTransferAddress(prev => ({ ...prev, [heroId]: "" }));
+      setRefreshKey(Date.now());
+    } catch (error) {
+      console.error("Error transferring hero:", error);
+      alert("Failed to transfer hero: " + (error as Error).message);
+    } finally {
+      setIsTransferring(prev => ({ ...prev, [heroId]: false }));
+    }
+  };
+
+  const handleList = async (heroId: string, price: string) => {
+    if (!price.trim() || Number(price) <= 0 || !accountAddress || !packageId) return;
+    
+    setIsListing(prev => ({ ...prev, [heroId]: true }));
+    
+    try {
+      const tx = buildListHeroTransaction(packageId, heroId, price);
+
+      await sponsorAndExecuteTransaction({
+        transaction: tx,
+        client: suiClient,
+        sender: accountAddress,
+        signSponsoredTransaction,
+        allowedMoveCallTargets: [`${packageId}::hero::list_hero`],
+      });
+      
+      console.log("Hero listed successfully!");
+      setListPrice(prev => ({ ...prev, [heroId]: "" }));
+      setRefreshKey(Date.now());
+    } catch (error) {
+      console.error("Error listing hero:", error);
+      alert("Failed to list hero: " + (error as Error).message);
+    } finally {
+      setIsListing(prev => ({ ...prev, [heroId]: false }));
+    }
+  };
+
+  if (!accountAddress) {
+    return (
+      <Card>
+        <Text>Please connect your wallet to see your heroes</Text>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <Text color="red">Error: {error.message}</Text>
+      </Card>
+    );
+  }
+
+  if (isPending || !data) {
+    return (
+      <Card>
+        <Text>Loading your heroes...</Text>
+      </Card>
+    );
+  }
+
+  const heroes = data.data.filter(obj => obj.data?.content && 'fields' in obj.data.content);
+
+  return (
+    <Flex direction="column" gap="4">
+      <Heading size="6">Your Heroes ({heroes.length})</Heading>
+      
+      {heroes.length === 0 ? (
+        <Card>
+          <Text>No heroes found in your wallet</Text>
+        </Card>
+      ) : (
+        <Grid columns="3" gap="4">
+          {heroes.map((obj) => {
+            const hero = obj.data?.content as any;
+            const heroId = obj.data?.objectId!;
+            const fields = hero.fields as Hero;
+
+            return (
+              <Card key={heroId} style={{ padding: "16px" }}>
+                <Flex direction="column" gap="3">
+                  {/* Hero Image */}
+                  <img 
+                    src={fields.image_url} 
+                    alt={fields.name}
+                    style={{ 
+                      width: "100%", 
+                      height: "200px", 
+                      objectFit: "cover", 
+                      borderRadius: "8px" 
+                    }}
+                  />
+                  
+                  {/* Hero Info */}
+                  <Flex direction="column" gap="2">
+                    <Text size="5" weight="bold">{fields.name}</Text>
+                    <Badge color="blue" size="2">Power: {fields.power}</Badge>
+                    
+                    <Flex align="center" gap="2">
+                      <Text size="3" color="gray" style={{ 
+                        fontFamily: "monospace"
+                      }}>
+                        {heroId.slice(0, 6)}...{heroId.slice(-6)}
+                      </Text>
+                      <Button 
+                        size="1" 
+                        variant="ghost"
+                        onClick={() => copyToClipboard(heroId, heroId)}
+                        color={copiedStates[heroId] ? "green" : undefined}
+                      >
+                        {copiedStates[heroId] ? "Copied!" : "Copy"}
+                      </Button>
+                    </Flex>
+                  </Flex>
+
+                  {/* Action Tabs */}
+                  <Tabs.Root defaultValue="transfer">
+                    <Tabs.List size="2">
+                      <Tabs.Trigger value="transfer">Transfer</Tabs.Trigger>
+                      <Tabs.Trigger value="list">List for Sale</Tabs.Trigger>
+                    </Tabs.List>
+
+                    <Tabs.Content value="transfer">
+                      <Flex direction="column" gap="2" mt="3">
+                        <TextField.Root
+                          placeholder="Recipient address"
+                          value={transferAddress[heroId] || ""}
+                          onChange={(e) => setTransferAddress(prev => ({
+                            ...prev,
+                            [heroId]: e.target.value
+                          }))}
+                        />
+                        <Button 
+                          onClick={() => handleTransfer(heroId, transferAddress[heroId])}
+                          disabled={!transferAddress[heroId]?.trim() || isTransferring[heroId] || isSigning}
+                          loading={isTransferring[heroId]}
+                          color="blue"
+                        >
+                          {isTransferring[heroId] ? "Transferring..." : "Transfer Hero"}
+                        </Button>
+                      </Flex>
+                    </Tabs.Content>
+
+                    <Tabs.Content value="list">
+                      <Flex direction="column" gap="2" mt="3">
+                        <TextField.Root
+                          placeholder="Price in SUI"
+                          type="number"
+                          value={listPrice[heroId] || ""}
+                          onChange={(e) => setListPrice(prev => ({
+                            ...prev,
+                            [heroId]: e.target.value
+                          }))}
+                        />
+                        <Button 
+                          onClick={() => handleList(heroId, listPrice[heroId])}
+                          disabled={!listPrice[heroId]?.trim() || isListing[heroId] || isSigning}
+                          loading={isListing[heroId]}
+                          color="green"
+                        >
+                          {isListing[heroId] ? "Listing..." : "List for Sale"}
+                        </Button>
+                      </Flex>
+                    </Tabs.Content>
+                  </Tabs.Root>
+                </Flex>
+              </Card>
+            );
+          })}
+        </Grid>
+      )}
+    </Flex>
+  );
+}

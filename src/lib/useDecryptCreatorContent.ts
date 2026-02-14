@@ -5,6 +5,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { fromHex, SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { SealClient, SessionKey, NoAccessError, EncryptedObject } from "@mysten/seal";
 import { ContentCreatorpackageId } from "./package_id";
+import { useEnokiAuth } from "../context/EnokiAuthContext";
 
 // Cache SessionKey across component mounts to avoid multiple sign-personal-message prompts,
 // especially under React.StrictMode where effects may run twice.
@@ -39,8 +40,9 @@ const TTL_MIN = 10;
  */
 export const useDecryptCreatorContent = (): UseDecryptCreatorContentReturn => {
   const suiClient = useSuiClient() as SuiClient;
-  const currentAccount = useCurrentAccount();
-  const { mutate: signPersonalMessage } = useSignPersonalMessage();
+  const { accountAddress, signPersonalMessage: signPersonalMessageWithZk } = useEnokiAuth();
+  const walletAccount = useCurrentAccount();
+  const { mutate: signPersonalMessageWithWallet } = useSignPersonalMessage();
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
@@ -60,7 +62,8 @@ export const useDecryptCreatorContent = (): UseDecryptCreatorContentReturn => {
     async ({ blobId, creatorId }: DecryptArgs): Promise<string | null> => {
       console.debug("[DecryptContent] Start", { blobId, creatorId });
 
-      if (!currentAccount?.address) {
+      const activeAddress = accountAddress || walletAccount?.address;
+      if (!activeAddress) {
         const msg = "Wallet non connectée.";
         setError(msg);
         throw new Error(msg);
@@ -72,7 +75,7 @@ export const useDecryptCreatorContent = (): UseDecryptCreatorContentReturn => {
         throw new Error(msg);
       }
 
-      const suiAddress = currentAccount.address;
+      const suiAddress = activeAddress;
 
       setIsDecrypting(true);
       setError(null);
@@ -114,31 +117,19 @@ export const useDecryptCreatorContent = (): UseDecryptCreatorContentReturn => {
                 suiClient,
               });
 
-              // Sign the personal message to authorize the session key
-              await new Promise<void>((resolve, reject) => {
-                signPersonalMessage(
-                  {
-                    message: key.getPersonalMessage(),
-                  },
-                  {
-                    onSuccess: async (result) => {
-                      console.debug("[DecryptContent] Personal message signed for SessionKey");
-                      try {
-                        await key.setPersonalMessageSignature(result.signature);
-                        console.debug("[DecryptContent] SessionKey signature set");
-                        resolve();
-                      } catch (err) {
-                        console.error("[DecryptContent] Failed to set SessionKey signature", err);
-                        reject(err);
-                      }
-                    },
-                    onError: (err) => {
-                      console.error("[DecryptContent] Error while signing personal message", err);
-                      reject(err as Error);
-                    },
-                  }
-                );
-              });
+              const signature = accountAddress
+                ? await signPersonalMessageWithZk(key.getPersonalMessage())
+                : await new Promise<string>((resolve, reject) => {
+                    signPersonalMessageWithWallet(
+                      { message: key.getPersonalMessage() },
+                      {
+                        onSuccess: (result: { signature: string }) => resolve(result.signature),
+                        onError: (error: Error) => reject(error),
+                      },
+                    );
+                  });
+              await key.setPersonalMessageSignature(signature);
+              console.debug("[DecryptContent] SessionKey signature set");
 
               cachedSessionKey = key;
               cachedSessionKeyAddress = suiAddress;
@@ -296,7 +287,7 @@ export const useDecryptCreatorContent = (): UseDecryptCreatorContentReturn => {
         setIsDecrypting(false);
       }
     },
-    [currentAccount?.address, signPersonalMessage, suiClient]
+    [accountAddress, walletAccount?.address, signPersonalMessageWithZk, signPersonalMessageWithWallet, suiClient]
   );
 
   return {
