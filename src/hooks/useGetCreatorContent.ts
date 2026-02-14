@@ -26,6 +26,15 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   return chunks;
 }
 
+function readOptionalNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function mapContentObjectsToCreatorContent(data: ObjectLike[]): CreatorContent[] {
   return data
     .map((obj) => {
@@ -34,12 +43,21 @@ function mapContentObjectsToCreatorContent(data: ObjectLike[]): CreatorContent[]
 
       const objectId = obj.data?.objectId ?? "";
       const resolvedId = extractObjectId(fields.id) ?? String(objectId);
+      const imageBlobId = readOptionalNonEmptyString(fields.image_blob_id);
+      const imageMimeType = readOptionalNonEmptyString(fields.image_mime_type);
+      const rawVideoBlobId = readOptionalNonEmptyString(fields.video_blob_id);
+      const rawVideoMimeType = readOptionalNonEmptyString(fields.video_mime_type);
+      const legacyBlobId = readOptionalNonEmptyString(fields.blob_id);
+      const videoBlobId = rawVideoBlobId ?? legacyBlobId;
 
       return {
         id: resolvedId,
         contentName: String(fields.content_name ?? ""),
-        contentDescription: String(fields.content_description ?? ""),
-        blobId: String(fields.blob_id ?? ""),
+        contentDescription: String(fields.content_description ?? fields.content_text ?? ""),
+        imageBlobId,
+        imageMimeType,
+        videoBlobId,
+        videoMimeType: videoBlobId ? rawVideoMimeType ?? "video/mp4" : null,
       };
     })
     .filter((item): item is CreatorContent => item !== null && item.id.length > 0);

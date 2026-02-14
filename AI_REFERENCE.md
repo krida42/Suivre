@@ -4,15 +4,15 @@
 
 Suivre (nom UI: **SuiFan**) est une dApp React + TypeScript sur Sui qui permet:
 - de creer un profil createur on-chain,
-- de publier des contenus videos chiffres,
+- de publier des posts contenant du texte, une image, une video, ou toute combinaison de ces formats,
 - de gerer des abonnements mensuels,
-- de dechiffrer les videos uniquement pour les abonnes valides.
+- de dechiffrer les medias (images/videos) uniquement pour les abonnes valides.
 
 Stack metier:
 - **Sui**: stockage des objets metier (Creator, Content, Subscription), execution des transactions.
 - **Move**: logique smart contract (`content_creator`).
-- **Walrus**: stockage du payload chiffre des videos.
-- **Seal**: chiffrement/dechiffrement et controle d'acces via `seal_approve`.
+- **Walrus**: stockage des payloads chiffres des medias (image/video).
+- **Seal**: chiffrement/dechiffrement des medias et controle d'acces via `seal_approve`.
 
 ## 2. Vue d'ensemble de l'architecture
 
@@ -37,16 +37,17 @@ Stack metier:
 1. Wallet connecte.
 2. Liste des createurs chargee depuis `AllCreators` + dynamic fields.
 3. Publication:
-   - video chiffree via Seal,
-   - blob envoye a Walrus,
+   - texte eventuel prepare pour on-chain,
+   - image/video eventuels chiffres via Seal,
+   - blobs medias envoyes a Walrus,
    - tx Move `upload_content`.
 4. Abonnement:
    - tx Move `subscribe` avec paiement (MIST).
 5. Lecture:
    - verification abonnement utilisateur,
-   - recuperation blob chiffre Walrus,
+   - recuperation blobs chiffres Walrus,
    - appel policy Move `seal_approve`,
-   - decrypt + lecture video.
+   - decrypt + rendu du post (texte + image/video selon disponibilite).
 
 ## 3. Arborescence utile
 
@@ -163,7 +164,11 @@ Centralise config Walrus/Seal:
 - `ContentCreator`: forme frontend d'un createur on-chain.
 
 ### `src/types/content.ts`
-- `CreatorContent`: metadonnees d'un contenu video.
+- `CreatorContent`: metadonnees d'un post createur:
+  - `contentName`
+  - `contentDescription`
+  - `imageBlobId` / `imageMimeType` (optionnels)
+  - `videoBlobId` / `videoMimeType` (optionnels)
 
 ### `src/types/subscriptions.ts`
 - `UserSubscription`: abonnement utilisateur.
@@ -243,7 +248,11 @@ Fonctionnement:
 2. Strategie principale: parcourt `creator.contents` via dynamic fields, resolve les `content_id`, puis charge les objets `Content`.
 3. Filtre les objets par suffixe de type `::content_creator::Content`.
 4. Fallback compatibilite: ancien modele wallet-owner (`getOwnedObjects` + filtre type).
-5. Mappe en `CreatorContent[]`.
+5. Mapping tolerant:
+   - nouveau schema Move (`image_blob_id`, `image_mime_type`, `video_blob_id`, `video_mime_type`),
+   - fallback legacy `blob_id` mappe en `videoBlobId`,
+   - `videoMimeType` fallback a `video/mp4` si `blob_id` legacy.
+6. Retourne `CreatorContent[]`.
 
 ### `src/hooks/useUserSubscriptions.ts`
 - `useUserSubscriptions()`:
@@ -257,15 +266,17 @@ Fonctionnement:
 ## 11. Hooks - transactions on-chain
 
 ### `src/hooks/usePublishContentTx.ts`
-- `publishContent({title, description, blobId, creatorId})`
+- `publishContent({title, text, imageBlobId, imageMimeType, videoBlobId, videoMimeType, creatorId})`
 
 Pipeline:
 1. Verifie wallet connecte.
 2. Verifie `creatorId` present.
 3. Lit objet createur et verifie qu'il appartient au wallet connecte.
 4. Trouve le `CreatorCap` du wallet qui matche exactement `creator_id == creatorId`.
-5. Construit tx Move `upload_content(cap, creator, content_name, content_description, blob_id)`.
-6. Signe/execut e via wallet.
+5. Valide qu'au moins un payload est present (`texte` ou `image` ou `video`).
+6. Construit tx Move:
+   - `upload_content(cap, creator, content_name, content_description, image_blob_id, image_mime_type, video_blob_id, video_mime_type)`.
+7. Signe/execute via wallet.
 
 ### `src/hooks/useSubscribeToCreator.ts`
 - `subscribeToCreator({creatorId})`
@@ -286,7 +297,7 @@ Pipeline:
 4. Retourne metadata blob.
 
 ### `src/hooks/useDecryptContent.ts`
-- `decryptContent({blobId, creatorId})`
+- `decryptContent({blobId, creatorId, mimeType})`
 
 Pipeline complet:
 1. Verifie wallet + params.
@@ -298,7 +309,7 @@ Pipeline complet:
 7. Construit tx-kind `seal_approve` (policy Move).
 8. `sealClient.fetchKeys(...)` (controle d'acces).
 9. `sealClient.decrypt(...)`.
-10. Cree `Blob` video + `URL.createObjectURL`.
+10. Cree `Blob` avec le `mimeType` du media + `URL.createObjectURL`.
 
 Gestion erreurs:
 - messages utilisateur explicites (`wallet`, `subscription`, `walrus`, `keys`, `decrypt`).
@@ -316,18 +327,21 @@ Gestion erreurs:
 - navigation vers profil createur.
 
 ### `src/pages/CreatorProfilePage.tsx`
-- header createur, bouton abonnement, liste contenus du createur.
+- header createur, bouton abonnement, liste posts du createur.
 - lit `useGetCreatorContent(activeCreator.id)`.
+- chaque carte indique les formats presents (`Texte`, `Image`, `Video`).
 
 ### `src/pages/PublishContentPage.tsx`
-- formulaire publication video.
+- formulaire publication post multi-format.
 - filtre createurs par wallet connecte.
-- upload Walrus chiffre + tx publish Sui.
-- feedback digest tx et blobId.
+- upload/chiffrement Walrus separes pour image et video.
+- tx publish Sui avec payload complet (texte + medias optionnels).
+- feedback digest tx + `imageBlobId`/`videoBlobId` si presents.
 
 ### `src/pages/ContentDetailPage.tsx`
-- lance le decryption au mount.
-- affiche loader / erreur / player video.
+- decrypte image/video si presents (texte affiche en clair depuis on-chain).
+- affiche loaders/erreurs medias.
+- rend image et/ou player video selon le contenu du post.
 
 ### `src/pages/CreateCreatorPage.tsx`
 - formulaire creation profil createur.
@@ -380,7 +394,15 @@ Module `sui_fan::content_creator`:
   - utilitaire de checks d'autorisation (cap lie au creator + owner wallet).
 - `upload_content(cap, creator, ...)`:
   - appelle `assert_creator_access`,
-  - cree `Content` avec `creator_id`,
+  - valide le payload:
+    - au moins un contenu present (`content_name` ou `content_description` ou media),
+    - coherence blob/mime pour image et video,
+  - cree `Content` avec:
+    - `content_name`
+    - `content_description`
+    - `image_blob_id` / `image_mime_type`
+    - `video_blob_id` / `video_mime_type`
+    - `creator_id`
   - ajoute l'ID du contenu dans `creator.contents`,
   - partage l'objet `Content` (pas de transfer au wallet).
 - `subscribe(fee, creator, clock, ctx)`:
@@ -441,26 +463,27 @@ Scripts principaux:
 3. tx `content_creator::new`.
 4. On-chain cree `ContentCreator` + `CreatorCap` + update `AllCreators`.
 
-### Publication contenu
+### Publication post
 1. UI selectionne createur du wallet courant.
-2. Fichier chiffre via Seal.
-3. Blob chiffre stocke Walrus -> recup blobId.
-4. tx `content_creator::upload_content` avec `CreatorCap` + `ContentCreator`.
-5. On-chain indexe le content dans `creator.contents` (source canonique de lecture).
+2. L'utilisateur ecrit le texte du post (optionnel).
+3. Image et/ou video (optionnelles) sont chiffrees via Seal.
+4. Les blobs medias chiffres sont stockes sur Walrus.
+5. tx `content_creator::upload_content` avec `CreatorCap` + `ContentCreator` + payload texte/media.
+6. On-chain indexe le content dans `creator.contents` (source canonique de lecture).
 
 ### Abonnement
 1. Utilisateur ouvre profil createur.
-2. Click abonnment -> lit `price_per_month` on-chain.
+2. Click abonnement -> lit `price_per_month` on-chain.
 3. tx `content_creator::subscribe` avec coin exact.
 4. `Subscription` creee dans wallet utilisateur.
 
-### Lecture video private
+### Lecture post private
 1. Detail content appelle `useDecryptContent`.
 2. Trouve sub valide pour createur.
-3. Download blob chiffre Walrus.
+3. Download blob(s) chiffre(s) Walrus (image/video).
 4. tx-kind `seal_approve` genere bytes policy.
 5. Seal fetch keys + decrypt.
-6. Video jouee en local via object URL.
+6. Les medias decryptees sont rendues via object URLs selon leur MIME type.
 
 ## 19. Limites / zones legacy connues
 
@@ -484,7 +507,8 @@ Scripts principaux:
 4. Decrypt robuste:
 - ne pas supprimer normalisation blobId,
 - ne pas supprimer fallback endpoints Walrus,
-- conserver policy `seal_approve` avant decrypt.
+- conserver policy `seal_approve` avant decrypt,
+- respecter le MIME type au moment de recreer le `Blob` de sortie.
 
 5. Queries:
 - privilegier React Query (cache + refetch) plutot que `useEffect` ad hoc.
@@ -502,7 +526,8 @@ Scripts principaux:
 - `VITE_ALL_CREATOR_OBJECT_ID` correct ?
 - CreatorCap present dans wallet createur ?
 - prix encode en MIST coherent ?
-- blobId reel Walrus (pas URL incomplete) ?
+- `imageBlobId`/`videoBlobId` reels Walrus (pas URL incomplete) ?
+- MIME type coherent avec le media chiffre ?
 - abonnement valide present pour le createur ?
 - erreurs `walrus_fetch_failed_status_xxx` ?
 - erreurs `NoAccessError` Seal (policy/subscription) ?

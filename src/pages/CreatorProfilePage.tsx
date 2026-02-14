@@ -73,7 +73,7 @@ export function CreatorProfilePage({
       </div>
 
       <div className="flex items-center gap-8 px-2 mb-6 border-b border-white/10">
-        <button className="pb-3 text-sm font-medium text-indigo-400 border-b-2 border-indigo-400">Videos</button>
+        <button className="pb-3 text-sm font-medium text-indigo-400 border-b-2 border-indigo-400">Posts</button>
         <button className="pb-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-400 hover:text-white">
           Communaute
         </button>
@@ -98,7 +98,7 @@ export function CreatorProfilePage({
               <div key={content.id} className="cursor-pointer group" onClick={() => goToContent(content)}>
                 <div className="relative mb-3 overflow-hidden transition-all border shadow-lg rounded-xl aspect-video bg-slate-800 border-white/5 group-hover:border-indigo-500/30 group-hover:shadow-indigo-500/20">
                   <div className="flex items-center justify-center w-full h-full text-xs font-medium text-slate-400 bg-white/5 backdrop-blur-sm">
-                    Contenu chiffre
+                    {content.videoBlobId ? "Video chiffree" : content.imageBlobId ? "Image chiffree" : "Post texte"}
                   </div>
                   <div className="absolute top-2 right-2">
                     <Badge variant="free">On-chain</Badge>
@@ -109,7 +109,13 @@ export function CreatorProfilePage({
                   {content.contentName || "Contenu sans titre"}
                 </h4>
                 <p className="mt-1 text-xs text-slate-400 line-clamp-3">{content.contentDescription}</p>
-                <p className="mt-1 text-[10px] text-slate-500 break-all font-mono">blobId: {content.blobId.slice(0, 10)}...</p>
+                <div className="flex items-center gap-2 mt-2">
+                  {(content.contentName.trim().length > 0 || content.contentDescription.trim().length > 0) && (
+                    <span className="px-2 py-1 text-[10px] rounded-full bg-white/10 text-slate-300">Texte</span>
+                  )}
+                  {content.imageBlobId && <span className="px-2 py-1 text-[10px] rounded-full bg-white/10 text-slate-300">Image</span>}
+                  {content.videoBlobId && <span className="px-2 py-1 text-[10px] rounded-full bg-white/10 text-slate-300">Video</span>}
+                </div>
               </div>
             ))}
           </div>

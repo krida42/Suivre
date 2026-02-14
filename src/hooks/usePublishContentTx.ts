@@ -8,8 +8,11 @@ import { extractObjectId, getObjectFields } from "@utils/sui/objectParsing";
 
 type PublishContentArgs = {
   title: string;
-  description: string;
-  blobId: string;
+  text: string;
+  imageBlobId: string | null;
+  imageMimeType: string | null;
+  videoBlobId: string | null;
+  videoMimeType: string | null;
   creatorId: string;
 };
 
@@ -23,6 +26,10 @@ type ExecuteTransactionResult = {
   digest: string;
 };
 
+function normalizeInput(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function usePublishContentTx(): UsePublishContentTxReturn {
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient() as SuiClient;
@@ -31,13 +38,36 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const publishContent = async ({ title, description, blobId, creatorId }: PublishContentArgs): Promise<{ digest: string }> => {
+  const publishContent = async ({
+    title,
+    text,
+    imageBlobId,
+    imageMimeType,
+    videoBlobId,
+    videoMimeType,
+    creatorId,
+  }: PublishContentArgs): Promise<{ digest: string }> => {
     if (!currentAccount?.address) {
       throw new Error("Wallet not connected");
     }
 
     if (!creatorId) {
       throw new Error("Creator ID is required");
+    }
+
+    const trimmedTitle = title.trim();
+    const trimmedText = text.trim();
+    const normalizedImageBlobId = normalizeInput(imageBlobId);
+    const normalizedVideoBlobId = normalizeInput(videoBlobId);
+    const resolvedImageMimeType = normalizedImageBlobId ? normalizeInput(imageMimeType) || "application/octet-stream" : "";
+    const resolvedVideoMimeType = normalizedVideoBlobId ? normalizeInput(videoMimeType) || "video/mp4" : "";
+
+    const hasText = trimmedTitle.length > 0 || trimmedText.length > 0;
+    const hasImage = normalizedImageBlobId.length > 0;
+    const hasVideo = normalizedVideoBlobId.length > 0;
+
+    if (!hasText && !hasImage && !hasVideo) {
+      throw new Error("A post must contain text, an image, or a video");
     }
 
     setIsPublishing(true);
@@ -95,9 +125,12 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
         arguments: [
           tx.object(creatorCapId),
           tx.object(creatorId),
-          tx.pure.string(title),
-          tx.pure.string(description),
-          tx.pure.string(blobId),
+          tx.pure.string(trimmedTitle),
+          tx.pure.string(trimmedText),
+          tx.pure.string(normalizedImageBlobId),
+          tx.pure.string(resolvedImageMimeType),
+          tx.pure.string(normalizedVideoBlobId),
+          tx.pure.string(resolvedVideoMimeType),
         ],
       });
 
@@ -118,7 +151,7 @@ export function usePublishContentTx(): UsePublishContentTxReturn {
 
       return { digest: result.digest };
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Unknown error while uploading content";
+      const message = e instanceof Error ? e.message : "Unknown error while publishing post";
       setError(message);
       throw e;
     } finally {
