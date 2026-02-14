@@ -1,26 +1,48 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { LayoutGrid, Upload } from "lucide-react";
+import { ImageIcon, LayoutGrid, Upload, Video } from "lucide-react";
 import { Button, Card, CardContent } from "@ui";
 import { useEncryptAndUploadWalrus } from "@hooks/useEncryptAndUploadWalrus";
 import { useGetAllCreators } from "@hooks/useGetAllCreators";
 import type { DashboardStats } from "@models/domain";
 import type { ContentCreator } from "@models/creators";
 
+type MediaKind = "image" | "video";
+
+type UploadedMedia = {
+  fileName: string;
+  blobId: string;
+  mimeType: string;
+};
+
 interface PublishContentPageProps {
   dashboardStats: DashboardStats | null;
   handleUpload: (payload: {
     title: string;
-    description: string;
-    blobId: string;
+    text: string;
+    imageBlobId: string | null;
+    imageMimeType: string | null;
+    videoBlobId: string | null;
+    videoMimeType: string | null;
     creatorId: string;
-    fileName: string | null;
   }) => Promise<{ digest: string }>;
 }
 
 function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function resolveBlobId(storageInfo: {
+  info?: {
+    blobId?: string;
+    blobObject?: { blobId?: string };
+    newlyCreated?: { blobObject?: { blobId?: string } };
+  };
+}): string | null {
+  const maybeBlobId =
+    storageInfo?.info?.newlyCreated?.blobObject?.blobId ?? storageInfo?.info?.blobObject?.blobId ?? storageInfo?.info?.blobId;
+  return typeof maybeBlobId === "string" && maybeBlobId.trim().length > 0 ? maybeBlobId : null;
 }
 
 export function PublishContentPage({ dashboardStats, handleUpload }: PublishContentPageProps) {
@@ -32,14 +54,16 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
     : [];
 
   const [manuallySelectedCreatorId, setManuallySelectedCreatorId] = useState("");
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [blobId, setBlobId] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [imageUpload, setImageUpload] = useState<UploadedMedia | null>(null);
+  const [videoUpload, setVideoUpload] = useState<UploadedMedia | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState<MediaKind | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [walrusError, setWalrusError] = useState<string | null>(null);
   const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
   const [suiDigest, setSuiDigest] = useState<string | null>(null);
+
   const { encryptAndUpload, isUploading } = useEncryptAndUploadWalrus();
 
   const selectedCreatorId =
@@ -47,9 +71,22 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
       ? manuallySelectedCreatorId
       : creators[0]?.id ?? "";
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    setImageUpload(null);
+    setVideoUpload(null);
+    setWalrusError(null);
+  }, [selectedCreatorId]);
+
+  const isUploadInProgress = isUploading || uploadingMedia !== null;
+  const hasText = title.trim().length > 0 || text.trim().length > 0;
+  const hasImage = Boolean(imageUpload?.blobId);
+  const hasVideo = Boolean(videoUpload?.blobId);
+  const hasPostPayload = hasText || hasImage || hasVideo;
+
+  const handleMediaChange = (kind: MediaKind) => async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
+
     if (!file) return;
 
     if (!selectedCreatorId) {
@@ -57,71 +94,85 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
       return;
     }
 
-    setSelectedFileName(file.name);
-    setBlobId(null);
-    setWalrusError(null);
+    if (kind === "image" && !file.type.startsWith("image/")) {
+      setWalrusError("Le fichier selectionne n'est pas une image valide.");
+      return;
+    }
+
+    if (kind === "video" && !file.type.startsWith("video/")) {
+      setWalrusError("Le fichier selectionne n'est pas une video valide.");
+      return;
+    }
+
     setFormError(null);
+    setWalrusError(null);
+    setSuiDigest(null);
+    setUploadingMedia(kind);
+    if (kind === "image") setImageUpload(null);
+    if (kind === "video") setVideoUpload(null);
 
-    encryptAndUpload(file, selectedCreatorId)
-      .then((storageInfo) => {
-        const maybeBlobId =
-          storageInfo?.info?.newlyCreated?.blobObject?.blobId ??
-          storageInfo?.info?.blobObject?.blobId ??
-          storageInfo?.info?.blobId;
+    try {
+      const storageInfo = await encryptAndUpload(file, selectedCreatorId);
+      const nextBlobId = resolveBlobId(storageInfo);
 
-        if (!maybeBlobId) {
-          console.error("Impossible de recuperer blobId depuis Walrus storageInfo", storageInfo);
-          setWalrusError("Erreur: impossible de recuperer l'identifiant du fichier chiffre.");
-          return;
-        }
+      if (!nextBlobId) {
+        console.error("Impossible de recuperer blobId depuis Walrus storageInfo", storageInfo);
+        setWalrusError("Erreur: impossible de recuperer l'identifiant du fichier chiffre.");
+        return;
+      }
 
-        setBlobId(maybeBlobId);
-      })
-      .catch((error) => {
-        console.error("Erreur lors de l'encrypt + push Walrus", error);
-        setWalrusError("Erreur lors du chiffrement et de l'envoi sur Walrus. Veuillez reessayer.");
-      });
+      const nextUpload: UploadedMedia = {
+        fileName: file.name,
+        blobId: nextBlobId,
+        mimeType: file.type || (kind === "image" ? "application/octet-stream" : "video/mp4"),
+      };
+
+      if (kind === "image") {
+        setImageUpload(nextUpload);
+      } else {
+        setVideoUpload(nextUpload);
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'encrypt + push Walrus", error);
+      setWalrusError("Erreur lors du chiffrement et de l'envoi sur Walrus. Veuillez reessayer.");
+    } finally {
+      setUploadingMedia(null);
+    }
   };
 
   const handleSubmitClick = async () => {
     setHasTriedSubmit(true);
     setFormError(null);
 
-    const trimmedTitle = title.trim();
-    const trimmedDescription = description.trim();
-
-    if (!trimmedTitle || !trimmedDescription || !blobId) {
-      const missing: string[] = [];
-      if (!trimmedTitle) missing.push("titre");
-      if (!trimmedDescription) missing.push("description");
-      if (!blobId) missing.push("fichier chiffre");
-
-      setFormError(`Merci de renseigner: ${missing.join(", ")}.`);
-      return;
-    }
-
     if (!selectedCreatorId) {
       setFormError("Veuillez selectionner un createur.");
       return;
     }
 
-    if (isUploading) {
-      setFormError("Le fichier est encore en cours de chiffrement. Merci de patienter.");
+    if (!hasPostPayload) {
+      setFormError("Un post doit contenir du texte, une image ou une video.");
+      return;
+    }
+
+    if (isUploadInProgress) {
+      setFormError("Un media est encore en cours de chiffrement. Merci de patienter.");
       return;
     }
 
     try {
       const result = await handleUpload({
-        title: trimmedTitle,
-        description: trimmedDescription,
-        blobId,
+        title: title.trim(),
+        text: text.trim(),
+        imageBlobId: imageUpload?.blobId ?? null,
+        imageMimeType: imageUpload?.mimeType ?? null,
+        videoBlobId: videoUpload?.blobId ?? null,
+        videoMimeType: videoUpload?.mimeType ?? null,
         creatorId: selectedCreatorId,
-        fileName: selectedFileName,
       });
       setSuiDigest(result.digest);
     } catch (error) {
-      console.error("Erreur lors de la publication de la video", error);
-      setFormError("Erreur lors de la publication de la video. Veuillez reessayer.");
+      console.error("Erreur lors de la publication du post", error);
+      setFormError("Erreur lors de la publication du post. Veuillez reessayer.");
     }
   };
 
@@ -131,7 +182,7 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
         <div className="md:col-span-2">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
             <LayoutGrid className="w-6 h-6 text-indigo-400" />
-            Uploader du contenu
+            Publier un post
           </h1>
         </div>
         {/* <div className="w-full">
@@ -174,74 +225,82 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
       )}
 
       <div className="flex justify-center">
-        <Card className="w-full max-w-2xl pt-6 border-white/10 shadow-xl glass-panel">
+        <Card className="w-full max-w-3xl pt-6 border-white/10 shadow-xl glass-panel">
           <CardContent className="p-6 space-y-5">
             <div>
-              <label className="block mb-1 text-sm font-medium text-slate-200">Titre de la video</label>
+              <label className="block mb-1 text-sm font-medium text-slate-200">Titre (optionnel)</label>
               <input
                 type="text"
-                className={`w-full p-2 border rounded-xl outline-none bg-white/5 text-white placeholder:text-slate-300 focus:ring-2 focus:border-transparent transition-all ${
-                  hasTriedSubmit && !title.trim()
-                    ? "border-red-500/50 focus:ring-red-500/50"
-                    : "border-white/10 focus:ring-indigo-500/50"
-                }`}
-                placeholder="Ex: Tutoriel Exclusif..."
+                className="w-full p-2 transition-all border rounded-xl outline-none bg-white/5 text-white placeholder:text-slate-300 focus:ring-2 focus:border-transparent border-white/10 focus:ring-indigo-500/50"
+                placeholder="Ex: Nouvel update..."
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
-              {hasTriedSubmit && !title.trim() && <p className="mt-1 text-xs text-red-400">Le titre est requis.</p>}
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium text-slate-200">Description</label>
-              <textarea
-                className={`w-full h-24 p-2 border rounded-xl outline-none resize-none bg-white/5 text-white placeholder:text-slate-300 focus:ring-2 focus:border-transparent transition-all ${
-                  hasTriedSubmit && !description.trim()
-                    ? "border-red-500/50 focus:ring-red-500/50"
-                    : "border-white/10 focus:ring-indigo-500/50"
-                }`}
-                placeholder="De quoi parle votre video ?"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              ></textarea>
-              {hasTriedSubmit && !description.trim() && <p className="mt-1 text-xs text-red-400">La description est requise.</p>}
             </div>
 
-            <label className="flex flex-col items-center justify-center gap-4 p-8 transition-all border-2 border-dashed rounded-xl cursor-pointer border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 group">
-              <input
-                type="file"
-                accept="video/mp4,video/quicktime"
-                className="hidden"
-                onChange={handleFileChange}
-                disabled={!selectedCreatorId || isUploading}
-              />
-              <div className="text-center">
-                <div className="p-3 mb-2 rounded-full bg-white/5 group-hover:bg-indigo-500/20 transition-colors inline-block">
-                  <Upload className="w-8 h-8 text-slate-300 group-hover:text-indigo-400 transition-colors" />
+            <div>
+              <label className="block mb-1 text-sm font-medium text-slate-200">Texte du post (optionnel)</label>
+              <textarea
+                className="w-full h-28 p-2 transition-all border rounded-xl outline-none resize-none bg-white/5 text-white placeholder:text-slate-300 focus:ring-2 focus:border-transparent border-white/10 focus:ring-indigo-500/50"
+                placeholder="Ecrivez le contenu de votre post..."
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              ></textarea>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="flex flex-col items-center justify-center gap-3 p-6 transition-all border-2 border-dashed rounded-xl cursor-pointer border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 group">
+                <input type="file" accept="image/*" className="hidden" onChange={handleMediaChange("image")} disabled={!selectedCreatorId || isUploadInProgress} />
+                <div className="text-center">
+                  <div className="inline-block p-3 mb-2 transition-colors rounded-full bg-white/5 group-hover:bg-indigo-500/20">
+                    <ImageIcon className="w-7 h-7 text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+                    {uploadingMedia === "image" ? "Chiffrement image..." : "Ajouter une image"}
+                  </p>
+                  <p className="text-xs text-slate-400">PNG, JPG, WEBP...</p>
+                  {imageUpload && (
+                    <p className="mt-2 text-xs text-slate-300">
+                      <span className="font-semibold text-indigo-300">{imageUpload.fileName}</span>
+                    </p>
+                  )}
                 </div>
-                <p className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
-                  {isUploading ? "Chiffrement en cours..." : "Glisser le fichier video ici"}
-                </p>
-                <p className="text-xs text-slate-400">MP4, MOV jusqu'a 2Go</p>
-                {selectedFileName && (
-                  <p className="mt-3 text-xs text-slate-300">
-                    Fichier selectionne: <span className="font-semibold text-indigo-300">{selectedFileName}</span>
+              </label>
+
+              <label className="flex flex-col items-center justify-center gap-3 p-6 transition-all border-2 border-dashed rounded-xl cursor-pointer border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 group">
+                <input type="file" accept="video/*" className="hidden" onChange={handleMediaChange("video")} disabled={!selectedCreatorId || isUploadInProgress} />
+                <div className="text-center">
+                  <div className="inline-block p-3 mb-2 transition-colors rounded-full bg-white/5 group-hover:bg-indigo-500/20">
+                    <Video className="w-7 h-7 text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+                    {uploadingMedia === "video" ? "Chiffrement video..." : "Ajouter une video"}
                   </p>
-                )}
-                {hasTriedSubmit && !blobId && (
-                  <p className="mt-1 text-xs text-red-400">
-                    Un fichier doit etre selectionne et chiffre avant la mise en ligne.
-                  </p>
-                )}
-                {walrusError && <p className="mt-1 text-xs text-red-400">{walrusError}</p>}
-              </div>
-            </label>
+                  <p className="text-xs text-slate-400">MP4, MOV, WEBM...</p>
+                  {videoUpload && (
+                    <p className="mt-2 text-xs text-slate-300">
+                      <span className="font-semibold text-indigo-300">{videoUpload.fileName}</span>
+                    </p>
+                  )}
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-xl bg-white/5 text-slate-300 border border-white/10">
+              <Upload className="w-4 h-4 text-indigo-300" />
+              <span>Les medias (image/video) sont chiffres avant publication via Seal + Walrus.</span>
+            </div>
 
             <div className="pt-2">
-              <Button variant="accent" className="w-full" onClick={handleSubmitClick} disabled={isUploading || creators.length === 0}>
-                Mettre en ligne
+              <Button variant="accent" className="w-full" onClick={handleSubmitClick} disabled={isUploadInProgress || creators.length === 0}>
+                Publier le post
               </Button>
+
+              {hasTriedSubmit && !hasPostPayload && <p className="mt-2 text-xs text-red-400">Ajoutez du texte, une image ou une video avant de publier.</p>}
               {formError && <p className="mt-2 text-xs text-red-400">{formError}</p>}
-              {(suiDigest || blobId) && (
+              {walrusError && <p className="mt-2 text-xs text-red-400">{walrusError}</p>}
+
+              {(suiDigest || imageUpload || videoUpload) && (
                 <div className="mt-4 space-y-2 text-xs text-slate-300">
                   {suiDigest && (
                     <>
@@ -258,20 +317,17 @@ export function PublishContentPage({ dashboardStats, handleUpload }: PublishCont
                       </a>
                     </>
                   )}
-                  {blobId && (
-                    <>
-                      <div className="font-mono break-all">
-                        <span className="font-semibold text-slate-200">Walrus blobId:</span> {blobId}
-                      </div>
-                      <a
-                        href={`https://walruscan.com/testnet/blob/${blobId}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-indigo-400 hover:text-indigo-300 hover:underline"
-                      >
-                        Voir le blob sur Walrus (testnet)
-                      </a>
-                    </>
+
+                  {imageUpload && (
+                    <div className="font-mono break-all">
+                      <span className="font-semibold text-slate-200">Image blobId:</span> {imageUpload.blobId}
+                    </div>
+                  )}
+
+                  {videoUpload && (
+                    <div className="font-mono break-all">
+                      <span className="font-semibold text-slate-200">Video blobId:</span> {videoUpload.blobId}
+                    </div>
                   )}
                 </div>
               )}

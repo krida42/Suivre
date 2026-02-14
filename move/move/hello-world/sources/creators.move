@@ -37,10 +37,12 @@ module sui_fan::content_creator {
     use sui::{clock::Clock, coin::Coin, sui::SUI};
     // use sui::{clock::Clock, coin::Coin, dynamic_field as df, sui::SUI};
 
-    // const EInvalidCap: u64 = 0;
+    const EInvalidCap: u64 = 0;
     const EInvalidFee: u64 = 1;
     const ENoAccess: u64 = 2;
-    // const MARKER: u64 = 3;
+    const ENotCreatorOwner: u64 = 3;
+    const EEmptyContent: u64 = 4;
+    const EInvalidMediaPayload: u64 = 5;
 
 
     public struct AllCreators has key {
@@ -61,17 +63,24 @@ module sui_fan::content_creator {
         price_per_month: u64,
         description: string::String,
         image_url: string::String,
+        contents: table::Table<u64, ID>,
+        content_count: u64,
     }
 
     public struct Content has key {
         id: UID,
+        creator_id: ID,
         content_name: string::String,
         content_description: string::String,
-        blob_id: string::String,
+        image_blob_id: string::String,
+        image_mime_type: string::String,
+        video_blob_id: string::String,
+        video_mime_type: string::String,
     }
 
     public struct CreatorCap has key {
         id: UID,
+        creator_id: ID,
     }
 
     fun init(ctx: &mut TxContext) {
@@ -95,26 +104,90 @@ module sui_fan::content_creator {
             description,
             image_url,
             wallet: ctx.sender(),
+            contents: table::new<u64, ID>(ctx),
+            content_count: 0,
         };
-        transfer::transfer(CreatorCap{id: object::new(ctx)}, ctx.sender());
-        table::add(&mut allCreators.creators, ctx.sender(), object::uid_to_inner(&new_creator.id));
+        let creator_id_for_cap = object::uid_to_inner(&new_creator.id);
+        let creator_id_for_index = object::uid_to_inner(&new_creator.id);
+
+        transfer::transfer(
+            CreatorCap {
+                id: object::new(ctx),
+                creator_id: creator_id_for_cap,
+            },
+            ctx.sender()
+        );
+        table::add(&mut allCreators.creators, ctx.sender(), creator_id_for_index);
         transfer::share_object(new_creator);
 
         // new_creator
 
     }
 
-    public fun upload_content(_cap: &CreatorCap, content_name: string::String, content_description: string::String, blob_id: string::String, ctx: &mut TxContext){
-        // check if ctx.sender() is a registered creator?
+    /// Reusable authorization guard for creator-managed actions.
+    fun assert_creator_access(cap: &CreatorCap, creator: &ContentCreator, sender: address) {
+        assert!(cap.creator_id == object::id(creator), EInvalidCap);
+        assert!(creator.wallet == sender, ENotCreatorOwner);
+    }
+
+    fun assert_media_payload(blob_id: &string::String, mime_type: &string::String): bool {
+        let has_blob = !string::is_empty(blob_id);
+        let has_mime = !string::is_empty(mime_type);
+        assert!(has_blob == has_mime, EInvalidMediaPayload);
+        has_blob
+    }
+
+    fun assert_content_payload(
+        content_name: &string::String,
+        content_description: &string::String,
+        image_blob_id: &string::String,
+        image_mime_type: &string::String,
+        video_blob_id: &string::String,
+        video_mime_type: &string::String,
+    ) {
+        let has_text = !string::is_empty(content_name) || !string::is_empty(content_description);
+        let has_image = assert_media_payload(image_blob_id, image_mime_type);
+        let has_video = assert_media_payload(video_blob_id, video_mime_type);
+        assert!(has_text || has_image || has_video, EEmptyContent);
+    }
+
+    public fun upload_content(
+        cap: &CreatorCap,
+        creator: &mut ContentCreator,
+        content_name: string::String,
+        content_description: string::String,
+        image_blob_id: string::String,
+        image_mime_type: string::String,
+        video_blob_id: string::String,
+        video_mime_type: string::String,
+        ctx: &mut TxContext
+    ){
+        assert_creator_access(cap, creator, ctx.sender());
+        assert_content_payload(
+            &content_name,
+            &content_description,
+            &image_blob_id,
+            &image_mime_type,
+            &video_blob_id,
+            &video_mime_type
+        );
+
         let new_content = Content {
             id: object::new(ctx),
+            creator_id: object::id(creator),
             content_name,
             content_description,
-            blob_id,
+            image_blob_id,
+            image_mime_type,
+            video_blob_id,
+            video_mime_type,
         };
+        let content_id = object::uid_to_inner(&new_content.id);
 
-        transfer::transfer(new_content, ctx.sender());
-        // new_content
+        table::add(&mut creator.contents, creator.content_count, content_id);
+        creator.content_count = creator.content_count + 1;
+
+        transfer::share_object(new_content);
         
     }
 

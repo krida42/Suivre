@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useCurrentAccount, useSignPersonalMessage, useSuiClient } from "@mysten/dapp-kit";
 import type { SuiClient } from "@mysten/sui/client";
-import { SealClient, SessionKey, NoAccessError, EncryptedObject } from "@mysten/seal";
+import { EncryptedObject, NoAccessError, SealClient, SessionKey } from "@mysten/seal";
 import { Transaction } from "@mysten/sui/transactions";
 import { fromHex, SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { CONTENT_CREATOR_PACKAGE_ID } from "@config/chain";
@@ -19,13 +19,13 @@ let sessionKeyInitPromise: Promise<SessionKey> | null = null;
 type DecryptArgs = {
   blobId: string;
   creatorId: string;
+  mimeType: string | null | undefined;
 };
 
 type UseDecryptContentReturn = {
-  videoUrl: string | null;
   isDecrypting: boolean;
   error: string | null;
-  decryptContent: (args: DecryptArgs) => Promise<string | null>;
+  decryptContent: (args: DecryptArgs) => Promise<string>;
 };
 
 type SubscriptionInfo = {
@@ -122,8 +122,7 @@ export function useDecryptContent(): UseDecryptContentReturn {
   const currentAccount = useCurrentAccount();
   const { mutate: signPersonalMessage } = useSignPersonalMessage();
 
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [activeDecryptions, setActiveDecryptions] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const sealClient = useMemo(
@@ -138,14 +137,6 @@ export function useDecryptContent(): UseDecryptContentReturn {
       }),
     [suiClient]
   );
-
-  useEffect(() => {
-    return () => {
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
-    };
-  }, [videoUrl]);
 
   const ensureSessionKey = useCallback(
     async (suiAddress: string): Promise<SessionKey> => {
@@ -200,7 +191,7 @@ export function useDecryptContent(): UseDecryptContentReturn {
   );
 
   const decryptContent = useCallback(
-    async ({ blobId, creatorId }: DecryptArgs): Promise<string | null> => {
+    async ({ blobId, creatorId, mimeType }: DecryptArgs): Promise<string> => {
       if (!currentAccount?.address) {
         setAndThrow(setError, "Wallet non connectee.");
       }
@@ -209,9 +200,8 @@ export function useDecryptContent(): UseDecryptContentReturn {
         setAndThrow(setError, "Parametres invalides pour le dechiffrement du contenu.");
       }
 
-      setIsDecrypting(true);
+      setActiveDecryptions((current) => current + 1);
       setError(null);
-      setVideoUrl(null);
 
       try {
         const suiAddress = currentAccount.address;
@@ -221,7 +211,6 @@ export function useDecryptContent(): UseDecryptContentReturn {
         }
 
         const sessionKey = await ensureSessionKey(suiAddress);
-
         const subscription = await getLatestSubscriptionForCreator(suiClient, suiAddress, creatorId);
 
         if (!subscription) {
@@ -273,26 +262,26 @@ export function useDecryptContent(): UseDecryptContentReturn {
             txBytes,
           });
 
-          const blob = new Blob([decrypted.buffer as ArrayBuffer], { type: "video/mp4" });
-          const url = URL.createObjectURL(blob);
-          setVideoUrl(url);
-          return url;
+          const resolvedMimeType = typeof mimeType === "string" && mimeType.trim().length > 0 ? mimeType.trim() : "application/octet-stream";
+          const normalizedBytes = new Uint8Array(decrypted.byteLength);
+          normalizedBytes.set(decrypted);
+          const blob = new Blob([normalizedBytes], { type: resolvedMimeType });
+          return URL.createObjectURL(blob);
         } catch (err) {
           if (err instanceof NoAccessError) {
             setAndThrow(setError, "Aucun acces aux cles de dechiffrement.");
           }
-          setAndThrow(setError, "Impossible de dechiffrer cette video.");
+          setAndThrow(setError, "Impossible de dechiffrer ce media.");
         }
       } finally {
-        setIsDecrypting(false);
+        setActiveDecryptions((current) => Math.max(0, current - 1));
       }
     },
     [currentAccount, ensureSessionKey, sealClient, suiClient]
   );
 
   return {
-    videoUrl,
-    isDecrypting,
+    isDecrypting: activeDecryptions > 0,
     error,
     decryptContent,
   };

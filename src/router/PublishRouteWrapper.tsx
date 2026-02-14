@@ -9,15 +9,20 @@ export function PublishRouteWrapper() {
 
   const handleUpload = async (payload: {
     title: string;
-    description: string;
-    blobId: string;
+    text: string;
+    imageBlobId: string | null;
+    imageMimeType: string | null;
+    videoBlobId: string | null;
+    videoMimeType: string | null;
     creatorId: string;
-    fileName: string | null;
   }) => {
     const result = await publishContent({
       title: payload.title,
-      description: payload.description,
-      blobId: payload.blobId,
+      text: payload.text,
+      imageBlobId: payload.imageBlobId,
+      imageMimeType: payload.imageMimeType,
+      videoBlobId: payload.videoBlobId,
+      videoMimeType: payload.videoMimeType,
       creatorId: payload.creatorId,
     });
 
@@ -35,7 +40,7 @@ export function PublishRouteWrapper() {
           <CheckCircle className="w-5 h-5 text-green-400" />
           <div>
             <p className="font-medium">Succes !</p>
-            <p className="text-xs text-slate-300">Votre video a ete publiee.</p>
+            <p className="text-xs text-slate-300">Votre post a ete publie.</p>
           </div>
         </div>
       )}
